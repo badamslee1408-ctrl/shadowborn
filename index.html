@@ -407,20 +407,21 @@ function autoWin(w,h){
 function detailK(v){ return 0.5-(v/100)*0.4; }
 
 /* XDoG line art: extended Difference of Gaussians -> clean ink lines.
-   v (0-100): higher = finer, more detailed lines.
-   The ink threshold is a percentile of edge strength (strongest 6% of dips),
-   so global brightness/contrast shifts can't reshuffle lines sectorally —
-   the detector adapts instead of popping regions in and out. */
+   v (0-100): line density, smooth and monotonic — higher = more lines.
+   The ink threshold is a percentile of edge strength, so global
+   brightness/contrast shifts can't reshuffle lines sectorally — the
+   detector adapts instead of popping regions in and out.
+   (Sigma fixed at the validated sweet spot r1=2/r2=3; integer radii can't
+   interpolate, which is why a fineness slider felt dead-then-jumpy.) */
 function xdogMask(gray,w,h,v){
-  const r1=1+Math.round((100-v)/100*4);      // 1..5
-  const r2=Math.max(2,Math.round(r1*1.6));   // 2..8
+  const r1=2, r2=3;
   const b1=boxBlur(gray,w,h,r1), b2=boxBlur(gray,w,h,r2);
   const n=w*h, hist=new Uint32Array(256);
   for(let i=0;i<n;i++){
     const d=b1[i]-0.99*b2[i];
     if(d<0){ const a=(-d)|0; hist[a>255?255:a]++; }
   }
-  const target=n*0.06;
+  const P=1.5+v*0.105, target=n*P/100;
   let cum=0, thr=0;
   for(let t=255;t>=0;t--){ cum+=hist[t]; if(cum>=target){ thr=t; break; } }
   const eps=-Math.max(thr,2);
@@ -677,7 +678,7 @@ const S={
   mask:null,            // single-mode mask
   layerMasks:null,      // multi-layer masks
   settings:{
-    mode:"lineart", level:75,
+    mode:"lineart", level:43,
     brightness:0, contrast:1, blur:0,
     invert:false, despeckle:0,
     bridges:true, bridgeW:8,
@@ -936,8 +937,15 @@ function syncToolUI(){
   $("toolVal").textContent=cfg.fmt(cfg.get());
   const chip=document.querySelector('#toolChips button[data-tool="level"]');
   if(chip) chip.textContent=cfg.label;
+  // in line-art mode Bright/Contrast are near-invariant (percentile adapts),
+  // so hide them instead of presenting dead controls
+  const la=S.settings.mode==="lineart";
+  if(la&&(activeTool==="bright"||activeTool==="contrast")) activeTool="level";
   document.querySelectorAll("#toolChips button").forEach(function(b){
-    b.classList.toggle("on",b.dataset.tool===activeTool);
+    const t=b.dataset.tool;
+    if(la&&(t==="bright"||t==="contrast")){ b.style.display="none"; }
+    else { b.style.display=""; }
+    b.classList.toggle("on",t===activeTool);
   });
 }
 $("toolSlider").addEventListener("input",function(){
@@ -958,7 +966,7 @@ $("btnAutoLevel").addEventListener("click",function(){
   const st=S.settings;
   st.brightness=0; st.contrast=1; st.blur=0; st.despeckle=0; st.grayDirty=true;
   if(st.mode==="adaptive") st.level=65;
-  else if(st.mode==="lineart") st.level=75;
+  else if(st.mode==="lineart") st.level=43;
   else st.level=otsuLevel(currentGray());
   activeTool="level"; syncToolUI(); schedule();
   status(st.mode==="lineart"?"Auto line-art baseline":
@@ -984,7 +992,7 @@ $("modeSeg").addEventListener("click",function(e){
     x.classList.toggle("on",x===b);
   });
   S.settings.level = S.settings.mode==="adaptive" ? 65
-    : S.settings.mode==="lineart" ? 75 : 128;
+    : S.settings.mode==="lineart" ? 43 : 128;
   // layers only meaningful for threshold bands
   const single=S.settings.mode!=="threshold";
   if(single && S.settings.layers>1){
