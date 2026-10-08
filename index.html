@@ -982,38 +982,50 @@ const TOOLS={
   blur:{min:0,max:10,step:1,
     get:function(){return S.settings.blur;},
     set:function(v){S.settings.blur=v;S.grayDirty=true;},fmt:String},
-  despeck:{min:-22,max:178,step:1,
-    get:function(){return S.settings.despeckle-22;},
-    set:function(v){S.settings.despeckle=22+v;},
-    fmt:function(v){return (v>0?"+":"")+v;}},
-  solid:{min:0,max:4,step:1,
-    get:function(){return S.settings.solid;},
-    set:function(v){S.settings.solid=v;},
-    fmt:function(v){return (v>0?"+":"")+v;}}
+  despeck:{min:-100,max:100,step:1,
+    get:function(){return absToSlider(S.settings.despeckle,0,200,22);},
+    set:function(v){S.settings.despeckle=sliderToAbs(v,0,200,22);},
+    fmt:deltaFmt},
+  solid:{min:0,max:100,step:1,
+    get:function(){return (S.settings.solid/4)*100;},
+    set:function(v){S.settings.solid=(v/100)*4;},
+    fmt:function(v){return "+"+Math.round(v);}}
 };
 let activeTool="level";
+/* Delta-slider helpers: slider s in [-100,100], 0 = standard (dead center).
+   Maps to absolute [absMin,absMax] piecewise so 0 always lands on std
+   with no dead zones or clamping. */
+function sliderToAbs(s,absMin,absMax,std){
+  if(s<=0) return std+(s/100)*(std-absMin);
+  return std+(s/100)*(absMax-std);
+}
+function absToSlider(a,absMin,absMax,std){
+  if(a<=std) return ((a-std)/(std-absMin))*100;
+  return ((a-std)/(absMax-std))*100;
+}
+function deltaFmt(v){ v=Math.round(v); return (v>0?"+":"")+v; }
 function levelCfg(){
   const m=S.settings.mode;
   if(m==="adaptive") return {min:0,max:100,step:1,label:"Detail",
     get:function(){return S.settings.level;},set:function(v){S.settings.level=v;},
     fmt:function(v){return v+"%";}};
   if(m==="lineart")
-    // delta from the user's standard: 0 = Lines 100 (the new zero)
+    // delta from the user's standard: 0 dead center = Lines 100
     return {min:-100,max:100,step:1,label:"Lines",
-      get:function(){return S.settings.level-100;},
-      set:function(v){S.settings.level=100+v;},
-      fmt:function(v){return (v>0?"+":"")+v;}};
+      get:function(){return absToSlider(S.settings.level,0,200,100);},
+      set:function(v){S.settings.level=sliderToAbs(v,0,200,100);},
+      fmt:deltaFmt};
   return {min:0,max:255,step:1,label:"Level",
     get:function(){return S.settings.level;},set:function(v){S.settings.level=v;},
     fmt:String};
 }
 /* Soft chip: independent additive refinement layer.
-   Delta from standard: 0 = Soft 83 (the new zero). */
+   Delta from standard: 0 dead center = Soft 83. */
 function softCfg(){
-  return {min:-83,max:117,step:1,label:"Soft",
-    get:function(){return S.settings.softAmt-83;},
-    set:function(v){S.settings.softAmt=83+v;},
-    fmt:function(v){return (v>0?"+":"")+v;}};
+  return {min:-100,max:100,step:1,label:"Soft",
+    get:function(){return absToSlider(S.settings.softAmt,0,200,83);},
+    set:function(v){S.settings.softAmt=sliderToAbs(v,0,200,83);},
+    fmt:deltaFmt};
 }
 function softCfg(){
   return {min:0,max:100,step:1,label:"Soft",
