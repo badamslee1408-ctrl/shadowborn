@@ -84,6 +84,15 @@
     height:58vh; min-height:280px; touch-action:none; border:1px solid #333;
   }
   #view{transform-origin:0 0; display:block;}
+  /* sticky live preview: pins under the header while you work the sliders */
+  #previewCard{position:sticky; z-index:15;}
+  #previewCard.stuck{padding:8px 10px;}
+  #previewCard.stuck h2{display:none;}
+  #previewCard.stuck #viewport{height:30vh; min-height:0;}
+  /* image loader compacts once a picture is in — buttons stay tappable */
+  #inputCard.done #dropZone>p:first-child{display:none;}
+  #inputCard.done{padding:8px 14px;}
+  #inputCard.done h2{margin:0 0 8px; font-size:13px;}
   #viewport .hint{
     position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
     color:#777; font-size:15px; pointer-events:none; text-align:center; padding:20px;
@@ -92,6 +101,23 @@
   .ctl{margin:6px 0 2px;}
   .ctl .lab{display:flex; justify-content:space-between; align-items:baseline; font-size:14px;}
   .ctl .lab .v{color:var(--accent); font-variant-numeric:tabular-nums; font-weight:600;}
+  .abtn{font-size:12px; font-weight:700; color:var(--accent); background:transparent;
+    border:1px solid var(--accent); border-radius:20px; padding:3px 12px; margin-left:8px;
+    cursor:pointer; min-height:32px;}
+  /* control dock: lives with the preview, one slider at a time */
+  #dock{margin-top:10px; padding-top:10px; border-top:1px solid #2c2c2c;}
+  #toolChips{display:flex; gap:6px; overflow-x:auto; margin:8px 0; padding-bottom:2px;
+    scrollbar-width:none;}
+  #toolChips::-webkit-scrollbar{display:none;}
+  #toolChips button{flex:0 0 auto; font-size:13px; font-weight:600; color:var(--muted);
+    background:#1a1a1a; border:1px solid #333; border-radius:16px; padding:7px 13px;
+    cursor:pointer; min-height:36px;}
+  #toolChips button.on{color:#181200; border-color:var(--accent); background:var(--accent);}
+  #toolRow{display:flex; align-items:center; gap:8px;}
+  #toolRow input[type=range]{flex:1; height:44px; margin:0;}
+  #toolRow .v{color:var(--accent); font-variant-numeric:tabular-nums; font-weight:600;
+    min-width:46px; text-align:right; font-size:14px;}
+  #toolRow .abtn{margin-left:0; flex:0 0 auto;}
   input[type=range]{
     width:100%; height:48px; margin:0; accent-color:var(--accent); cursor:pointer;
     background:transparent;
@@ -175,37 +201,30 @@
       <div class="hint" id="viewHint">Load an image to start.<br>Drag to pan &middot; pinch or buttons to zoom.</div>
     </div>
     <div id="layerBar" class="hidden"></div>
+    <div id="dock">
+      <div class="seg" id="modeSeg">
+        <button data-mode="threshold">Threshold</button>
+        <button data-mode="lineart" class="on">Line art</button>
+        <button data-mode="adaptive">Adaptive</button>
+      </div>
+      <div id="toolChips">
+        <button data-tool="level" class="on">Level</button>
+        <button data-tool="bright">Bright</button>
+        <button data-tool="contrast">Contrast</button>
+        <button data-tool="blur">Smooth</button>
+        <button data-tool="despeck">Clean</button>
+      </div>
+      <div id="toolRow">
+        <button class="abtn" id="btnAutoLevel">Auto</button>
+        <input type="range" id="toolSlider" min="0" max="255" value="128" step="1">
+        <span class="v" id="toolVal">128</span>
+      </div>
+    </div>
   </section>
 
-  <!-- 3. PROCESSING CONTROLS -->
+  <!-- 3. TUNE -->
   <section class="card" id="procCard">
-    <h2>3 · Process</h2>
-
-    <div class="seg" id="modeSeg">
-      <button data-mode="threshold" class="on">Threshold</button>
-      <button data-mode="edge">Edge detect</button>
-    </div>
-
-    <div class="ctl">
-      <div class="lab"><span id="levelLabel">Threshold level</span><span class="v" id="levelVal">128</span></div>
-      <input type="range" id="sldLevel" min="0" max="255" value="128" step="1">
-    </div>
-    <div class="ctl">
-      <div class="lab"><span>Brightness</span><span class="v" id="brightVal">0</span></div>
-      <input type="range" id="sldBright" min="-120" max="120" value="0" step="1">
-    </div>
-    <div class="ctl">
-      <div class="lab"><span>Contrast</span><span class="v" id="contrastVal">100%</span></div>
-      <input type="range" id="sldContrast" min="20" max="300" value="100" step="1">
-    </div>
-    <div class="ctl">
-      <div class="lab"><span>Smoothing (blur)</span><span class="v" id="blurVal">1</span></div>
-      <input type="range" id="sldBlur" min="0" max="10" value="1" step="1">
-    </div>
-    <div class="ctl">
-      <div class="lab"><span>Despeckle <span class="muted">(removes tiny blobs &amp; holes)</span></span><span class="v" id="despeckVal">40 px</span></div>
-      <input type="range" id="sldDespeck" min="0" max="2000" value="40" step="10">
-    </div>
+    <h2>3 · Tune</h2>
 
     <div class="tglrow">
       <button class="tgl" id="tglInvert" aria-pressed="false">Invert</button>
@@ -321,23 +340,85 @@ function thresholdMask(gray, w, h, level){
   return m;
 }
 
-/* Sobel edge detect: strong gradients become ink. */
-function sobelMask(gray, w, h, level){
-  const m = new Uint8Array(w*h);
-  for(let y=1;y<h-1;y++){
+/* Otsu's method: threshold maximizing between-class variance.
+   One-tap sane starting point so the level slider isn't hunted blind. */
+function otsuLevel(gray){
+  const hist=new Array(256).fill(0);
+  for(let i=0;i<gray.length;i++) hist[gray[i]]++;
+  const total=gray.length;
+  let sum=0;
+  for(let t=0;t<256;t++) sum+=t*hist[t];
+  let sumB=0, wB=0, best=0, thresh=128;
+  for(let t=0;t<256;t++){
+    wB+=hist[t];
+    if(!wB) continue;
+    const wF=total-wB;
+    if(!wF) break;
+    sumB+=t*hist[t];
+    const mB=sumB/wB, mF=(sum-sumB)/wF, d=mB-mF;
+    const between=wB*wF*d*d;
+    if(between>best){ best=between; thresh=t; }
+  }
+  return thresh;
+}
+
+/* Sauvola adaptive threshold: per-pixel threshold from local mean/std.
+   This is the maximum-detail baseline — uneven lighting no longer crushes
+   shadows or blows highlights the way a single global threshold does.
+   Integral images make it O(w*h). */
+function integralImages(gray,w,h){
+  const W=w+1, I=new Float64Array(W*(h+1)), I2=new Float64Array(W*(h+1));
+  for(let y=0;y<h;y++){
+    let rs=0, rs2=0;
     const row=y*w;
-    for(let x=1;x<w-1;x++){
-      const i=row+x;
-      const gx = -gray[i-w-1] - 2*gray[i-1] - gray[i+w-1]
-                 + gray[i-w+1] + 2*gray[i+1] + gray[i+w+1];
-      const gy = -gray[i-w-1] - 2*gray[i-w] - gray[i-w+1]
-                 + gray[i+w-1] + 2*gray[i+w] + gray[i+w+1];
-      const mag = (Math.abs(gx)+Math.abs(gy))>>3; // approx |g|/2, 0..~255
-      m[i] = mag >= level ? 1 : 0;
+    for(let x=0;x<w;x++){
+      const v=gray[row+x]; rs+=v; rs2+=v*v;
+      const idx=(y+1)*W+(x+1);
+      I[idx]=I[y*W+(x+1)]+rs;
+      I2[idx]=I2[y*W+(x+1)]+rs2;
+    }
+  }
+  return {I:I,I2:I2,W:W};
+}
+function rectSum(I,W,x0,y0,x1,y1){
+  return I[y1*W+x1]-I[y0*W+x1]-I[y1*W+x0]+I[y0*W+x0];
+}
+function sauvolaMask(gray,w,h,k,win){
+  const T=integralImages(gray,w,h), I=T.I, I2=T.I2, W=T.W;
+  const m=new Uint8Array(w*h), R=128, r=(win>>1);
+  for(let y=0;y<h;y++){
+    const y0=Math.max(0,y-r), y1=Math.min(h,y+r+1), row=y*w;
+    for(let x=0;x<w;x++){
+      const x0=Math.max(0,x-r), x1=Math.min(w,x+r+1);
+      const n=(x1-x0)*(y1-y0);
+      const mean=rectSum(I,W,x0,y0,x1,y1)/n;
+      const sq=rectSum(I2,W,x0,y0,x1,y1)/n;
+      const std=Math.sqrt(Math.max(0,sq-mean*mean));
+      const t=mean*(1+k*(std/R-1));
+      m[row+x]=gray[row+x]<t?1:0;
     }
   }
   return m;
 }
+/* window scales with image size; k: 0.5 = clean classic, 0.1 = max detail */
+function autoWin(w,h){
+  return Math.max(15,Math.min(61,Math.round(Math.min(w,h)/32)));
+}
+function detailK(v){ return 0.5-(v/100)*0.4; }
+
+/* XDoG line art: extended Difference of Gaussians -> clean ink lines.
+   This is the engine behind control-like results from art: bold connected
+   lines, clean background, no gray mush. Tuned against a real control. */
+function xdogMask(gray,w,h,eps){
+  const s=Math.max(1,Math.min(w,h)/350);
+  const r1=Math.max(1,Math.round(s*1.732)), r2=Math.max(1,Math.round(s*1.6*1.732));
+  const b1=boxBlur(gray,w,h,r1), b2=boxBlur(gray,w,h,r2);
+  const m=new Uint8Array(w*h), tau=0.99;
+  for(let i=0;i<w*h;i++) m[i]=(b1[i]-tau*b2[i])<eps?1:0;
+  return m;
+}
+/* slider 0-100 ("Lines"): 0 = bold/dense, 100 = fine/sparse */
+function lineEps(v){ return 20-v*0.6; }
 
 function invertMask(mask){
   for(let i=0;i<mask.length;i++) mask[i]^=1;
@@ -587,9 +668,9 @@ const S={
   mask:null,            // single-mode mask
   layerMasks:null,      // multi-layer masks
   settings:{
-    mode:"threshold", level:128,
-    brightness:0, contrast:1, blur:1,
-    invert:false, despeckle:40,
+    mode:"lineart", level:47,
+    brightness:0, contrast:1, blur:0,
+    invert:false, despeckle:0,
     bridges:true, bridgeW:8,
     layers:1, layer:0
   },
@@ -628,6 +709,7 @@ function setupImage(img, name){
     (m>MAXDIM?(" → working "+w+"×"+h+" (downscaled)"):"");
   $("viewHint").style.display="none";
   fitView(); process();
+  $("inputCard").classList.add("done");
   status("Image loaded.");
 }
 
@@ -653,9 +735,9 @@ function buildMasks(){
   }
   if(st.layers<=1){
     S.layerMasks=null;
-    S.mask = st.mode==="threshold"
-      ? finish(thresholdMask(gray,w,h,st.level))
-      : finish(sobelMask(gray,w,h,st.level));
+    S.mask = st.mode==="threshold" ? finish(thresholdMask(gray,w,h,st.level))
+      : st.mode==="lineart" ? finish(xdogMask(gray,w,h,lineEps(st.level),w,h))
+      : finish(sauvolaMask(gray,w,h,detailK(st.level),autoWin(w,h)));
   }else{
     const bands=layerBands(gray,w,h,st.layers);
     S.layerMasks=bands.map(function(b){
@@ -769,6 +851,26 @@ viewport.addEventListener("wheel",function(e){
 },{passive:false});
 window.addEventListener("resize",function(){ fitView(); });
 
+/* ---------- sticky preview + collapsible loader ---------- */
+(function(){
+  const pc=$("previewCard");
+  function fitSticky(){
+    const h=document.querySelector(".topbar").offsetHeight||56;
+    pc.style.top=h+"px";
+  }
+  window.addEventListener("resize",fitSticky); fitSticky();
+  let tick=false;
+  function check(){
+    tick=false;
+    const top=parseFloat(pc.style.top)||0;
+    const r=pc.getBoundingClientRect();
+    pc.classList.toggle("stuck", window.scrollY>10 && r.top<=top+1);
+  }
+  window.addEventListener("scroll",function(){
+    if(!tick){ tick=true; requestAnimationFrame(check); }
+  },{passive:true});
+})();
+
 /* ---------- view toggle ---------- */
 function syncViewSeg(){
   const btns=$("viewSeg").querySelectorAll("button");
@@ -789,25 +891,75 @@ function bindSlider(id,valId,fmt,apply){
 }
 function grayAffecting(fn){ return function(n){ fn(n); S.grayDirty=true; schedule(); }; }
 
-bindSlider("sldLevel","levelVal",String,function(n){
-  S.settings.level=n; schedule();
+/* ---------- dock: one shared slider, tool chips ---------- */
+const TOOLS={
+  bright:{min:-120,max:120,step:1,
+    get:function(){return S.settings.brightness;},
+    set:function(v){S.settings.brightness=v;S.grayDirty=true;},fmt:String},
+  contrast:{min:20,max:300,step:1,
+    get:function(){return Math.round(S.settings.contrast*100);},
+    set:function(v){S.settings.contrast=v/100;S.grayDirty=true;},
+    fmt:function(v){return v+"%";}},
+  blur:{min:0,max:10,step:1,
+    get:function(){return S.settings.blur;},
+    set:function(v){S.settings.blur=v;S.grayDirty=true;},fmt:String},
+  despeck:{min:0,max:200,step:1,
+    get:function(){return S.settings.despeckle;},
+    set:function(v){S.settings.despeckle=v;},fmt:function(v){return v+" px";}}
+};
+let activeTool="level";
+function levelCfg(){
+  const m=S.settings.mode;
+  if(m==="adaptive") return {min:0,max:100,step:1,label:"Detail",
+    get:function(){return S.settings.level;},set:function(v){S.settings.level=v;},
+    fmt:function(v){return v+"%";}};
+  if(m==="lineart") return {min:0,max:100,step:1,label:"Lines",
+    get:function(){return S.settings.level;},set:function(v){S.settings.level=v;},
+    fmt:function(v){return v+"%";}};
+  return {min:0,max:255,step:1,label:"Level",
+    get:function(){return S.settings.level;},set:function(v){S.settings.level=v;},
+    fmt:String};
+}
+function syncToolUI(){
+  const cfg=activeTool==="level"?levelCfg():TOOLS[activeTool];
+  const s=$("toolSlider");
+  s.min=cfg.min; s.max=cfg.max; s.step=cfg.step; s.value=cfg.get();
+  $("toolVal").textContent=cfg.fmt(cfg.get());
+  const chip=document.querySelector('#toolChips button[data-tool="level"]');
+  if(chip) chip.textContent=cfg.label;
+  document.querySelectorAll("#toolChips button").forEach(function(b){
+    b.classList.toggle("on",b.dataset.tool===activeTool);
+  });
+}
+$("toolSlider").addEventListener("input",function(){
+  const cfg=activeTool==="level"?levelCfg():TOOLS[activeTool];
+  const n=parseFloat($("toolSlider").value);
+  cfg.set(n);
+  $("toolVal").textContent=cfg.fmt(n);
+  schedule();
 });
-bindSlider("sldBright","brightVal",String,grayAffecting(function(n){
-  S.settings.brightness=n;
-}));
-bindSlider("sldContrast","contrastVal",function(n){return n+"%";},grayAffecting(function(n){
-  S.settings.contrast=n/100;
-}));
-bindSlider("sldBlur","blurVal",String,grayAffecting(function(n){
-  S.settings.blur=n;
-}));
-bindSlider("sldDespeck","despeckVal",function(n){return n+" px";},function(n){
-  S.settings.despeckle=n; schedule();
+$("toolChips").addEventListener("click",function(e){
+  const b=e.target.closest("button"); if(!b) return;
+  activeTool=b.dataset.tool; syncToolUI();
+});
+
+/* Auto: detail-maximizing baseline for the current mode */
+$("btnAutoLevel").addEventListener("click",function(){
+  if(!S.srcCanvas){ status("Load an image first."); return; }
+  const st=S.settings;
+  st.brightness=0; st.contrast=1; st.blur=0; st.despeckle=0; st.grayDirty=true;
+  if(st.mode==="adaptive") st.level=65;
+  else if(st.mode==="lineart") st.level=47;
+  else st.level=otsuLevel(currentGray());
+  activeTool="level"; syncToolUI(); schedule();
+  status(st.mode==="lineart"?"Auto line-art baseline":
+    st.mode==="adaptive"?"Auto detail baseline":"Auto threshold: "+st.level);
 });
 bindSlider("sldBridgeW","bridgeVal",function(n){return n+" px";},function(n){
   S.settings.bridgeW=n; schedule();
 });
 bindSlider("sldLayers","layersVal",String,function(n){
+  if(S.settings.mode!=="threshold"){ n=1; $("sldLayers").value=1; }
   S.settings.layers=n; S.settings.layer=0; buildLayerBar();
   // invert applies to the single-mask pipeline only; grey it out in multi-layer
   const multi=n>1, t=$("tglInvert");
@@ -822,10 +974,19 @@ $("modeSeg").addEventListener("click",function(e){
   $("modeSeg").querySelectorAll("button").forEach(function(x){
     x.classList.toggle("on",x===b);
   });
-  $("levelLabel").textContent = S.settings.mode==="threshold"
-    ? "Threshold level" : "Edge sensitivity";
-  schedule();
+  S.settings.level = S.settings.mode==="adaptive" ? 65
+    : S.settings.mode==="lineart" ? 47 : 128;
+  // layers only meaningful for threshold bands
+  const single=S.settings.mode!=="threshold";
+  if(single && S.settings.layers>1){
+    S.settings.layers=1; S.settings.layer=0;
+    $("sldLayers").value=1; $("layersVal").textContent="1"; buildLayerBar();
+    const t=$("tglInvert"); t.style.opacity="1"; t.style.pointerEvents="auto";
+  }
+  $("sldLayers").disabled=single;
+  activeTool="level"; syncToolUI(); schedule();
 });
+syncToolUI();
 
 function bindToggle(id,get,set){
   const el=$(id);
