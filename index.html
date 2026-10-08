@@ -122,6 +122,22 @@
     width:100%; height:48px; margin:0; accent-color:var(--accent); cursor:pointer;
     background:transparent;
   }
+  /* Center-out fill for delta sliders: track painted via JS gradient */
+  #toolSlider{
+    -webkit-appearance:none; appearance:none;
+    --track:#3a3a3a;
+  }
+  #toolSlider::-webkit-slider-runnable-track{ background:transparent; }
+  #toolSlider::-webkit-slider-thumb{
+    -webkit-appearance:none; appearance:none;
+    width:24px; height:24px; border-radius:50%;
+    background:var(--accent); border:none; margin-top:10px; cursor:pointer;
+  }
+  #toolSlider::-moz-range-track{ background:transparent; }
+  #toolSlider::-moz-range-thumb{
+    width:24px; height:24px; border:none; border-radius:50%;
+    background:var(--accent); cursor:pointer;
+  }
   /* toggle buttons */
   .tgl{
     min-height:48px; padding:10px 16px; border-radius:10px; font-size:15px; font-weight:600;
@@ -986,10 +1002,10 @@ const TOOLS={
     get:function(){return absToSlider(S.settings.despeckle,0,200,22);},
     set:function(v){S.settings.despeckle=sliderToAbs(v,0,200,22);},
     fmt:deltaFmt},
-  solid:{min:0,max:100,step:1,
+  solid:{min:-100,max:100,step:1,
     get:function(){return (S.settings.solid/4)*100;},
-    set:function(v){S.settings.solid=(v/100)*4;},
-    fmt:function(v){return "+"+Math.round(v);}}
+    set:function(v){S.settings.solid=v<=0?0:(v/100)*4;},
+    fmt:deltaFmt}
 };
 let activeTool="level";
 /* Delta-slider helpers: slider s in [-100,100], 0 = standard (dead center).
@@ -1035,6 +1051,26 @@ function softCfg(){
 function toolCfg(){
   return activeTool==="level"?levelCfg():activeTool==="soft"?softCfg():TOOLS[activeTool];
 }
+/* Center-out track fill: at 0 (standard) no orange shows; fill grows
+   from the center as you push positive or negative. */
+function paintSlider(){
+  const s=$("toolSlider");
+  const min=parseFloat(s.min), max=parseFloat(s.max), v=parseFloat(s.value);
+  const vp=((v-min)/(max-min))*100;
+  const A="var(--accent)", T="var(--track,#3a3a3a)";
+  let g;
+  if(min<0&&max>0){
+    if(v>0) g="linear-gradient(to right,"+T+" 0%,"+T+" 50%,"+A+" 50%,"+A+" "+vp+"%,"+T+" "+vp+"%,"+T+" 100%)";
+    else if(v<0) g="linear-gradient(to right,"+T+" 0%,"+T+" "+vp+"%,"+A+" "+vp+"%,"+A+" 50%,"+T+" 50%,"+T+" 100%)";
+    else g=T; // v=0: plain track, no orange
+  }else{
+    g="linear-gradient(to right,"+A+" 0%,"+A+" "+vp+"%,"+T+" "+vp+"%,"+T+" 100%)";
+  }
+  s.style.background=g;
+  s.style.backgroundSize="100% 6px";
+  s.style.backgroundPosition="center";
+  s.style.backgroundRepeat="no-repeat";
+}
 function syncToolUI(){
   const cfg=toolCfg();
   const s=$("toolSlider");
@@ -1055,12 +1091,17 @@ function syncToolUI(){
     else { b.style.display=""; }
     b.classList.toggle("on",t===activeTool);
   });
+  paintSlider();
 }
 $("toolSlider").addEventListener("input",function(){
   const cfg=toolCfg();
   const n=parseFloat($("toolSlider").value);
   cfg.set(n);
-  $("toolVal").textContent=cfg.fmt(n);
+  // snap back if the value was clamped (e.g. Solid dragged negative)
+  const actual=cfg.get();
+  if(actual!==n) $("toolSlider").value=actual;
+  $("toolVal").textContent=cfg.fmt(actual);
+  paintSlider();
   schedule();
 });
 $("toolChips").addEventListener("click",function(e){
