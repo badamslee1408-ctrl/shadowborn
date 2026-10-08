@@ -739,9 +739,9 @@ const S={
   mask:null,            // single-mode mask
   layerMasks:null,      // multi-layer masks
   settings:{
-    mode:"lineart", level:43, softAmt:0, solid:0,
+    mode:"lineart", level:100, softAmt:83, solid:0,
     brightness:0, contrast:1, blur:0,
-    invert:false, despeckle:0,
+    invert:false, despeckle:22,
     bridges:true, bridgeW:8,
     layers:1, layer:0
   },
@@ -1048,11 +1048,15 @@ $("toolChips").addEventListener("click",function(e){
 $("btnAutoLevel").addEventListener("click",function(){
   if(!S.srcCanvas){ status("Load an image first."); return; }
   const st=S.settings;
-  st.brightness=0; st.contrast=1; st.blur=0; st.despeckle=0; st.grayDirty=true;
-  if(st.mode==="lineart"){ st.softAmt=0; st.solid=0; }
-  if(st.mode==="adaptive") st.level=65;
-  else if(st.mode==="lineart") st.level=43;
-  else st.level=otsuLevel(currentGray());
+  st.brightness=0; st.contrast=1; st.blur=0; st.grayDirty=true;
+  if(st.mode==="lineart"){
+    // user's preferred standard baseline
+    st.level=100; st.softAmt=83; st.solid=0; st.despeckle=22;
+  }else{
+    st.despeckle=0;
+    if(st.mode==="adaptive") st.level=65;
+    else st.level=otsuLevel(currentGray());
+  }
   activeTool="level"; syncToolUI(); schedule();
   status(st.mode==="lineart"?"Auto line-art baseline":
     st.mode==="adaptive"?"Auto detail baseline":"Auto threshold: "+st.level);
@@ -1077,7 +1081,7 @@ $("modeSeg").addEventListener("click",function(e){
     x.classList.toggle("on",x===b);
   });
   S.settings.level = S.settings.mode==="adaptive" ? 65
-    : S.settings.mode==="lineart" ? 43 : 128;
+    : S.settings.mode==="lineart" ? 100 : 128;
   // blur is hidden in line-art (Bold replaces it); reset so no hidden state lingers
   if(S.settings.mode==="lineart") S.settings.blur=0;
   // layers only meaningful for threshold bands
