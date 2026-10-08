@@ -210,6 +210,7 @@
       <div id="toolChips">
         <button data-tool="level" class="on">Level</button>
         <button data-tool="soft">Soft</button>
+        <button data-tool="bold">Bold</button>
         <button data-tool="bright">Bright</button>
         <button data-tool="contrast">Contrast</button>
         <button data-tool="blur">Smooth</button>
@@ -427,6 +428,35 @@ function xdogMask(gray,w,h,v){
   const m=new Uint8Array(n);
   for(let i=0;i<n;i++) m[i]=(b1[i]-0.99*b2[i])<eps?1:0;
   return m;
+}
+/* Binary dilation: expands ink regions. This is "solidify" — thickens lines
+   and fills small gaps. Unlike blur-before-detection (which just erases
+   fine detail), this acts on the detected lines directly. */
+function dilateMask(mask,w,h,r){
+  if(r<=0) return mask;
+  const n=w*h, tmp=new Uint8Array(n), out=new Uint8Array(n);
+  for(let y=0;y<h;y++){
+    const row=y*w;
+    for(let x=0;x<w;x++){
+      let m=0;
+      for(let k=-r;k<=r;k++){
+        const xx=x+k;
+        if(xx>=0&&xx<w&&mask[row+xx]){ m=1; break; }
+      }
+      tmp[row+x]=m;
+    }
+  }
+  for(let x=0;x<w;x++){
+    for(let y=0;y<h;y++){
+      let m=0;
+      for(let k=-r;k<=r;k++){
+        const yy=y+k;
+        if(yy>=0&&yy<h&&tmp[yy*w+x]){ m=1; break; }
+      }
+      out[y*w+x]=m;
+    }
+  }
+  return out;
 }
 /* Soft-line discovery: a SEPARATE additive pass for faint boundaries
    (white-to-lightblue, portrait shading). Finer scale, higher sensitivity,
@@ -697,7 +727,7 @@ const S={
   mask:null,            // single-mode mask
   layerMasks:null,      // multi-layer masks
   settings:{
-    mode:"lineart", level:43, softAmt:0,
+    mode:"lineart", level:43, softAmt:0, bold:0,
     brightness:0, contrast:1, blur:0,
     invert:false, despeckle:0,
     bridges:true, bridgeW:8,
@@ -772,6 +802,8 @@ function buildMasks(){
       const soft=xdogSoftMask(gray,w,h,st.softAmt);
       for(let i=0;i<base.length;i++) base[i]|=soft[i];
     }
+    // Bold: solidify lines (dilation) — thickens and connects, unlike blur
+    if(st.mode==="lineart"&&st.bold>0) base=dilateMask(base,w,h,st.bold);
     S.mask=finish(base);
   }else{
     const bands=layerBands(gray,w,h,st.layers);
@@ -940,7 +972,10 @@ const TOOLS={
     set:function(v){S.settings.blur=v;S.grayDirty=true;},fmt:String},
   despeck:{min:0,max:200,step:1,
     get:function(){return S.settings.despeckle;},
-    set:function(v){S.settings.despeckle=v;},fmt:function(v){return v+" px";}}
+    set:function(v){S.settings.despeckle=v;},fmt:function(v){return v+" px";}},
+  bold:{min:0,max:4,step:1,
+    get:function(){return S.settings.bold;},
+    set:function(v){S.settings.bold=v;},fmt:function(v){return v+" px";}}
 };
 let activeTool="level";
 function levelCfg(){
@@ -974,15 +1009,16 @@ function syncToolUI(){
   // in line-art mode Bright/Contrast are near-invariant (percentile adapts),
   // so hide them instead of presenting dead controls
   const la=S.settings.mode==="lineart";
-  if(la&&(activeTool==="bright"||activeTool==="contrast")) activeTool="level";
+  if(la&&(activeTool==="bright"||activeTool==="contrast"||activeTool==="blur")) activeTool="level";
+  if(!la&&activeTool==="soft") activeTool="level";
+  if(!la&&activeTool==="bold") activeTool="level";
   document.querySelectorAll("#toolChips button").forEach(function(b){
     const t=b.dataset.tool;
-    if(la&&(t==="bright"||t==="contrast")){ b.style.display="none"; }
-    else if(!la&&t==="soft"){ b.style.display="none"; }
+    if(la&&(t==="bright"||t==="contrast"||t==="blur")){ b.style.display="none"; }
+    else if(!la&&(t==="soft"||t==="bold")){ b.style.display="none"; }
     else { b.style.display=""; }
     b.classList.toggle("on",t===activeTool);
   });
-  if(!la&&activeTool==="soft") activeTool="level";
 }
 $("toolSlider").addEventListener("input",function(){
   const cfg=toolCfg();
@@ -1001,7 +1037,7 @@ $("btnAutoLevel").addEventListener("click",function(){
   if(!S.srcCanvas){ status("Load an image first."); return; }
   const st=S.settings;
   st.brightness=0; st.contrast=1; st.blur=0; st.despeckle=0; st.grayDirty=true;
-  if(st.mode==="lineart") st.softAmt=0;
+  if(st.mode==="lineart"){ st.softAmt=0; st.bold=0; }
   if(st.mode==="adaptive") st.level=65;
   else if(st.mode==="lineart") st.level=43;
   else st.level=otsuLevel(currentGray());
@@ -1030,6 +1066,8 @@ $("modeSeg").addEventListener("click",function(e){
   });
   S.settings.level = S.settings.mode==="adaptive" ? 65
     : S.settings.mode==="lineart" ? 43 : 128;
+  // blur is hidden in line-art (Bold replaces it); reset so no hidden state lingers
+  if(S.settings.mode==="lineart") S.settings.blur=0;
   // layers only meaningful for threshold bands
   const single=S.settings.mode!=="threshold";
   if(single && S.settings.layers>1){
