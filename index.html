@@ -407,14 +407,25 @@ function autoWin(w,h){
 function detailK(v){ return 0.5-(v/100)*0.4; }
 
 /* XDoG line art: extended Difference of Gaussians -> clean ink lines.
-   v (0-100): higher = finer, more detailed lines. Validated against a real
-   control: v=75 gives fine control-like line work, v=100 finest. */
+   v (0-100): higher = finer, more detailed lines.
+   The ink threshold is a percentile of edge strength (strongest 6% of dips),
+   so global brightness/contrast shifts can't reshuffle lines sectorally —
+   the detector adapts instead of popping regions in and out. */
 function xdogMask(gray,w,h,v){
   const r1=1+Math.round((100-v)/100*4);      // 1..5
   const r2=Math.max(2,Math.round(r1*1.6));   // 2..8
   const b1=boxBlur(gray,w,h,r1), b2=boxBlur(gray,w,h,r2);
-  const m=new Uint8Array(w*h), tau=0.99, eps=-6;
-  for(let i=0;i<w*h;i++) m[i]=(b1[i]-tau*b2[i])<eps?1:0;
+  const n=w*h, hist=new Uint32Array(256);
+  for(let i=0;i<n;i++){
+    const d=b1[i]-0.99*b2[i];
+    if(d<0){ const a=(-d)|0; hist[a>255?255:a]++; }
+  }
+  const target=n*0.06;
+  let cum=0, thr=0;
+  for(let t=255;t>=0;t--){ cum+=hist[t]; if(cum>=target){ thr=t; break; } }
+  const eps=-Math.max(thr,2);
+  const m=new Uint8Array(n);
+  for(let i=0;i<n;i++) m[i]=(b1[i]-0.99*b2[i])<eps?1:0;
   return m;
 }
 
