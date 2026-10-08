@@ -407,18 +407,16 @@ function autoWin(w,h){
 function detailK(v){ return 0.5-(v/100)*0.4; }
 
 /* XDoG line art: extended Difference of Gaussians -> clean ink lines.
-   This is the engine behind control-like results from art: bold connected
-   lines, clean background, no gray mush. Tuned against a real control. */
-function xdogMask(gray,w,h,eps){
-  const s=Math.max(1,Math.min(w,h)/350);
-  const r1=Math.max(1,Math.round(s*1.732)), r2=Math.max(1,Math.round(s*1.6*1.732));
+   v (0-100): higher = finer, more detailed lines. Validated against a real
+   control: v=75 gives fine control-like line work, v=100 finest. */
+function xdogMask(gray,w,h,v){
+  const r1=1+Math.round((100-v)/100*4);      // 1..5
+  const r2=Math.max(2,Math.round(r1*1.6));   // 2..8
   const b1=boxBlur(gray,w,h,r1), b2=boxBlur(gray,w,h,r2);
-  const m=new Uint8Array(w*h), tau=0.99;
+  const m=new Uint8Array(w*h), tau=0.99, eps=-6;
   for(let i=0;i<w*h;i++) m[i]=(b1[i]-tau*b2[i])<eps?1:0;
   return m;
 }
-/* slider 0-100 ("Lines"): 0 = bold/dense, 100 = fine/sparse */
-function lineEps(v){ return 20-v*0.6; }
 
 function invertMask(mask){
   for(let i=0;i<mask.length;i++) mask[i]^=1;
@@ -668,7 +666,7 @@ const S={
   mask:null,            // single-mode mask
   layerMasks:null,      // multi-layer masks
   settings:{
-    mode:"lineart", level:47,
+    mode:"lineart", level:75,
     brightness:0, contrast:1, blur:0,
     invert:false, despeckle:0,
     bridges:true, bridgeW:8,
@@ -736,7 +734,7 @@ function buildMasks(){
   if(st.layers<=1){
     S.layerMasks=null;
     S.mask = st.mode==="threshold" ? finish(thresholdMask(gray,w,h,st.level))
-      : st.mode==="lineart" ? finish(xdogMask(gray,w,h,lineEps(st.level),w,h))
+      : st.mode==="lineart" ? finish(xdogMask(gray,w,h,st.level))
       : finish(sauvolaMask(gray,w,h,detailK(st.level),autoWin(w,h)));
   }else{
     const bands=layerBands(gray,w,h,st.layers);
@@ -949,7 +947,7 @@ $("btnAutoLevel").addEventListener("click",function(){
   const st=S.settings;
   st.brightness=0; st.contrast=1; st.blur=0; st.despeckle=0; st.grayDirty=true;
   if(st.mode==="adaptive") st.level=65;
-  else if(st.mode==="lineart") st.level=47;
+  else if(st.mode==="lineart") st.level=75;
   else st.level=otsuLevel(currentGray());
   activeTool="level"; syncToolUI(); schedule();
   status(st.mode==="lineart"?"Auto line-art baseline":
@@ -975,7 +973,7 @@ $("modeSeg").addEventListener("click",function(e){
     x.classList.toggle("on",x===b);
   });
   S.settings.level = S.settings.mode==="adaptive" ? 65
-    : S.settings.mode==="lineart" ? 47 : 128;
+    : S.settings.mode==="lineart" ? 75 : 128;
   // layers only meaningful for threshold bands
   const single=S.settings.mode!=="threshold";
   if(single && S.settings.layers>1){
