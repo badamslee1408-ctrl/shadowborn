@@ -421,7 +421,7 @@ function xdogMask(gray,w,h,v){
     const d=b1[i]-0.99*b2[i];
     if(d<0){ const a=(-d)|0; hist[a>255?255:a]++; }
   }
-  const P=1.5+v*0.105, target=n*P/100;
+  const P=v*0.12, target=n*P/100;
   let cum=0, thr=0;
   for(let t=255;t>=0;t--){ cum+=hist[t]; if(cum>=target){ thr=t; break; } }
   const eps=-Math.max(thr,2);
@@ -482,7 +482,7 @@ function xdogSoftMask(gray,w,h,v){
     const d=b1[i]-0.99*b2[i];
     if(d<0){ const a=(-d)|0; hist[a>255?255:a]++; }
   }
-  const P=2+v*0.16, target=n*P/100;
+  const P=v*0.184, target=n*P/100;
   let cum=0, thr=0;
   for(let t=255;t>=0;t--){ cum+=hist[t]; if(cum>=target){ thr=t; break; } }
   const eps=-Math.max(thr,0.5);
@@ -982,12 +982,14 @@ const TOOLS={
   blur:{min:0,max:10,step:1,
     get:function(){return S.settings.blur;},
     set:function(v){S.settings.blur=v;S.grayDirty=true;},fmt:String},
-  despeck:{min:0,max:200,step:1,
-    get:function(){return S.settings.despeckle;},
-    set:function(v){S.settings.despeckle=v;},fmt:function(v){return v+" px";}},
+  despeck:{min:-22,max:178,step:1,
+    get:function(){return S.settings.despeckle-22;},
+    set:function(v){S.settings.despeckle=22+v;},
+    fmt:function(v){return (v>0?"+":"")+v;}},
   solid:{min:0,max:4,step:1,
     get:function(){return S.settings.solid;},
-    set:function(v){S.settings.solid=v;},fmt:function(v){return v+" px";}}
+    set:function(v){S.settings.solid=v;},
+    fmt:function(v){return (v>0?"+":"")+v;}}
 };
 let activeTool="level";
 function levelCfg(){
@@ -995,14 +997,24 @@ function levelCfg(){
   if(m==="adaptive") return {min:0,max:100,step:1,label:"Detail",
     get:function(){return S.settings.level;},set:function(v){S.settings.level=v;},
     fmt:function(v){return v+"%";}};
-  if(m==="lineart") return {min:0,max:100,step:1,label:"Lines",
-    get:function(){return S.settings.level;},set:function(v){S.settings.level=v;},
-    fmt:function(v){return v+"%";}};
+  if(m==="lineart")
+    // delta from the user's standard: 0 = Lines 100 (the new zero)
+    return {min:-100,max:100,step:1,label:"Lines",
+      get:function(){return S.settings.level-100;},
+      set:function(v){S.settings.level=100+v;},
+      fmt:function(v){return (v>0?"+":"")+v;}};
   return {min:0,max:255,step:1,label:"Level",
     get:function(){return S.settings.level;},set:function(v){S.settings.level=v;},
     fmt:String};
 }
-/* Soft chip: independent additive refinement layer (0 = off) */
+/* Soft chip: independent additive refinement layer.
+   Delta from standard: 0 = Soft 83 (the new zero). */
+function softCfg(){
+  return {min:-83,max:117,step:1,label:"Soft",
+    get:function(){return S.settings.softAmt-83;},
+    set:function(v){S.settings.softAmt=83+v;},
+    fmt:function(v){return (v>0?"+":"")+v;}};
+}
 function softCfg(){
   return {min:0,max:100,step:1,label:"Soft",
     get:function(){return S.settings.softAmt;},set:function(v){S.settings.softAmt=v;},
@@ -1048,12 +1060,11 @@ $("toolChips").addEventListener("click",function(e){
 $("btnAutoLevel").addEventListener("click",function(){
   if(!S.srcCanvas){ status("Load an image first."); return; }
   const st=S.settings;
-  st.brightness=0; st.contrast=1; st.blur=0; st.grayDirty=true;
+  st.brightness=0; st.contrast=1; st.blur=0; st.despeckle=22; st.grayDirty=true;
   if(st.mode==="lineart"){
-    // user's preferred standard baseline
-    st.level=100; st.softAmt=83; st.solid=0; st.despeckle=22;
+    // user's preferred standard baseline (the new zero)
+    st.level=100; st.softAmt=83; st.solid=0;
   }else{
-    st.despeckle=0;
     if(st.mode==="adaptive") st.level=65;
     else st.level=otsuLevel(currentGray());
   }
