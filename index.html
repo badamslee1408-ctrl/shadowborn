@@ -118,7 +118,6 @@
   #toolRow .v{color:var(--accent); font-variant-numeric:tabular-nums; font-weight:600;
     min-width:46px; text-align:right; font-size:14px;}
   #toolRow .abtn{margin-left:0; flex:0 0 auto;}
-  #toolRow .abtn.on{background:var(--accent); color:#181200; border-color:var(--accent);}
   input[type=range]{
     width:100%; height:48px; margin:0; accent-color:var(--accent); cursor:pointer;
     background:transparent;
@@ -210,6 +209,7 @@
       </div>
       <div id="toolChips">
         <button data-tool="level" class="on">Level</button>
+        <button data-tool="soft">Soft</button>
         <button data-tool="bright">Bright</button>
         <button data-tool="contrast">Contrast</button>
         <button data-tool="blur">Smooth</button>
@@ -217,7 +217,6 @@
       </div>
       <div id="toolRow">
         <button class="abtn" id="btnAutoLevel">Auto</button>
-        <button class="abtn" id="btnSoft" aria-pressed="false">Soft</button>
         <input type="range" id="toolSlider" min="0" max="255" value="128" step="1">
         <span class="v" id="toolVal">128</span>
       </div>
@@ -412,22 +411,39 @@ function detailK(v){ return 0.5-(v/100)*0.4; }
    v (0-100): line density, smooth and monotonic — higher = more lines.
    The ink threshold is a percentile of edge strength, so global
    brightness/contrast shifts can't reshuffle lines sectorally — the
-   detector adapts instead of popping regions in and out.
-   soft: "soft line discovery" — finer scale + higher sensitivity for faint
-   boundaries (white-to-lightblue, portrait shading). May include noise;
-   that's the point — it shows you everything that's there. */
-function xdogMask(gray,w,h,v,soft){
-  const r1=soft?1:2, r2=soft?2:3;
+   detector adapts instead of popping regions in and out. */
+function xdogMask(gray,w,h,v){
+  const r1=2, r2=3;
   const b1=boxBlur(gray,w,h,r1), b2=boxBlur(gray,w,h,r2);
   const n=w*h, hist=new Uint32Array(256);
   for(let i=0;i<n;i++){
     const d=b1[i]-0.99*b2[i];
     if(d<0){ const a=(-d)|0; hist[a>255?255:a]++; }
   }
-  const P=soft?6+v*0.14:1.5+v*0.105, target=n*P/100;
+  const P=1.5+v*0.105, target=n*P/100;
   let cum=0, thr=0;
   for(let t=255;t>=0;t--){ cum+=hist[t]; if(cum>=target){ thr=t; break; } }
-  const eps=-Math.max(thr,soft?0.5:2);
+  const eps=-Math.max(thr,2);
+  const m=new Uint8Array(n);
+  for(let i=0;i<n;i++) m[i]=(b1[i]-0.99*b2[i])<eps?1:0;
+  return m;
+}
+/* Soft-line discovery: a SEPARATE additive pass for faint boundaries
+   (white-to-lightblue, portrait shading). Finer scale, higher sensitivity,
+   lower noise floor. Computed independently and OR-ed onto the main line
+   work — it refines the result without touching it. */
+function xdogSoftMask(gray,w,h,v){
+  const r1=1, r2=2;
+  const b1=boxBlur(gray,w,h,r1), b2=boxBlur(gray,w,h,r2);
+  const n=w*h, hist=new Uint32Array(256);
+  for(let i=0;i<n;i++){
+    const d=b1[i]-0.99*b2[i];
+    if(d<0){ const a=(-d)|0; hist[a>255?255:a]++; }
+  }
+  const P=2+v*0.16, target=n*P/100;
+  let cum=0, thr=0;
+  for(let t=255;t>=0;t--){ cum+=hist[t]; if(cum>=target){ thr=t; break; } }
+  const eps=-Math.max(thr,0.5);
   const m=new Uint8Array(n);
   for(let i=0;i<n;i++) m[i]=(b1[i]-0.99*b2[i])<eps?1:0;
   return m;
@@ -681,7 +697,7 @@ const S={
   mask:null,            // single-mode mask
   layerMasks:null,      // multi-layer masks
   settings:{
-    mode:"lineart", level:43, soft:false,
+    mode:"lineart", level:43, softAmt:0,
     brightness:0, contrast:1, blur:0,
     invert:false, despeckle:0,
     bridges:true, bridgeW:8,
@@ -748,9 +764,15 @@ function buildMasks(){
   }
   if(st.layers<=1){
     S.layerMasks=null;
-    S.mask = st.mode==="threshold" ? finish(thresholdMask(gray,w,h,st.level))
-      : st.mode==="lineart" ? finish(xdogMask(gray,w,h,st.level,st.soft))
-      : finish(sauvolaMask(gray,w,h,detailK(st.level),autoWin(w,h)));
+    let base = st.mode==="threshold" ? thresholdMask(gray,w,h,st.level)
+      : st.mode==="lineart" ? xdogMask(gray,w,h,st.level)
+      : sauvolaMask(gray,w,h,detailK(st.level),autoWin(w,h));
+    // soft-line discovery is an ADDITIVE refinement layer, not a replacement
+    if(st.mode==="lineart"&&st.softAmt>0){
+      const soft=xdogSoftMask(gray,w,h,st.softAmt);
+      for(let i=0;i<base.length;i++) base[i]|=soft[i];
+    }
+    S.mask=finish(base);
   }else{
     const bands=layerBands(gray,w,h,st.layers);
     S.layerMasks=bands.map(function(b){
@@ -933,8 +955,17 @@ function levelCfg(){
     get:function(){return S.settings.level;},set:function(v){S.settings.level=v;},
     fmt:String};
 }
+/* Soft chip: independent additive refinement layer (0 = off) */
+function softCfg(){
+  return {min:0,max:100,step:1,label:"Soft",
+    get:function(){return S.settings.softAmt;},set:function(v){S.settings.softAmt=v;},
+    fmt:function(v){return v+"%";}};
+}
+function toolCfg(){
+  return activeTool==="level"?levelCfg():activeTool==="soft"?softCfg():TOOLS[activeTool];
+}
 function syncToolUI(){
-  const cfg=activeTool==="level"?levelCfg():TOOLS[activeTool];
+  const cfg=toolCfg();
   const s=$("toolSlider");
   s.min=cfg.min; s.max=cfg.max; s.step=cfg.step; s.value=cfg.get();
   $("toolVal").textContent=cfg.fmt(cfg.get());
@@ -947,14 +978,14 @@ function syncToolUI(){
   document.querySelectorAll("#toolChips button").forEach(function(b){
     const t=b.dataset.tool;
     if(la&&(t==="bright"||t==="contrast")){ b.style.display="none"; }
+    else if(!la&&t==="soft"){ b.style.display="none"; }
     else { b.style.display=""; }
     b.classList.toggle("on",t===activeTool);
   });
-  // Soft toggle only relevant for line-art level tool
-  $("btnSoft").style.display=(la&&activeTool==="level")?"":"none";
+  if(!la&&activeTool==="soft") activeTool="level";
 }
 $("toolSlider").addEventListener("input",function(){
-  const cfg=activeTool==="level"?levelCfg():TOOLS[activeTool];
+  const cfg=toolCfg();
   const n=parseFloat($("toolSlider").value);
   cfg.set(n);
   $("toolVal").textContent=cfg.fmt(n);
@@ -965,20 +996,12 @@ $("toolChips").addEventListener("click",function(e){
   activeTool=b.dataset.tool; syncToolUI();
 });
 
-/* Soft toggle: soft-line discovery for faint boundaries */
-$("btnSoft").addEventListener("click",function(){
-  S.settings.soft=!S.settings.soft;
-  $("btnSoft").classList.toggle("on",S.settings.soft);
-  $("btnSoft").setAttribute("aria-pressed",String(S.settings.soft));
-  schedule();
-  status(S.settings.soft?"Soft line discovery on":"Soft line discovery off");
-});
-
 /* Auto: detail-maximizing baseline for the current mode */
 $("btnAutoLevel").addEventListener("click",function(){
   if(!S.srcCanvas){ status("Load an image first."); return; }
   const st=S.settings;
   st.brightness=0; st.contrast=1; st.blur=0; st.despeckle=0; st.grayDirty=true;
+  if(st.mode==="lineart") st.softAmt=0;
   if(st.mode==="adaptive") st.level=65;
   else if(st.mode==="lineart") st.level=43;
   else st.level=otsuLevel(currentGray());
