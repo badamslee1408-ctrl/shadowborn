@@ -1,0 +1,467 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Just for you</title>
+<style>
+  :root{
+    --bg:#050810; --panel:rgba(10,18,38,.88); --accent:#38bdf8; --accent-soft:#bae6fd;
+    --pink:#f472b6; --line:rgba(56,189,248,.4); --txt:#e2e8f0; --dim:#94a3b8;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;background:radial-gradient(120% 90% at 50% 0%, #0a1428 0%, var(--bg) 60%);color:var(--txt);
+       font-family:Georgia,'Times New Roman',serif;padding:18px 14px 40px;min-height:100vh;}
+  .wrap{max-width:560px;margin:0 auto;}
+  .panel{background:var(--panel);border:1px solid var(--line);padding:20px 18px;margin-bottom:14px;
+         clip-path:polygon(14px 0,100% 0,100% calc(100% - 14px),calc(100% - 14px) 100%,0 100%,0 14px);
+         box-shadow:0 0 24px rgba(56,189,248,.15), inset 0 0 32px rgba(56,189,248,.05);}
+  h1{font-size:19px;letter-spacing:3px;text-align:center;color:var(--accent-soft);margin:2px 0 6px;font-weight:normal;}
+  h2{font-size:16.5px;letter-spacing:2px;color:var(--accent-soft);margin:0 0 6px;font-weight:normal;}
+  .sub{text-align:center;color:var(--dim);font-size:13.5px;line-height:1.55;margin:0 0 4px;}
+  .intro{color:var(--dim);font-size:13.5px;line-height:1.55;margin:0 0 14px;}
+  .q{margin:0 0 16px;}
+  .q p{margin:0 0 7px;font-size:15.5px;line-height:1.4;}
+  .seg{display:flex;gap:6px;flex-wrap:wrap;}
+  .seg button{flex:1 1 30%;padding:10px 4px;background:rgba(56,189,248,.06);color:var(--dim);border:1px solid rgba(56,189,248,.25);
+              font-family:inherit;font-size:13px;cursor:pointer;letter-spacing:.3px;}
+  .seg button.sel-love{background:rgba(244,114,182,.25);border-color:var(--pink);color:#fbcfe8;}
+  .seg button.sel-like{background:rgba(56,189,248,.28);border-color:var(--accent);color:var(--accent-soft);}
+  .seg button.sel-curious{background:rgba(56,189,248,.13);border-color:rgba(56,189,248,.6);color:var(--accent-soft);}
+  .seg button.sel-soft_no{background:rgba(100,116,139,.22);border-color:#64748b;color:#cbd5e1;}
+  .seg button.sel-hard_no{background:rgba(127,29,29,.35);border-color:#b91c1c;color:#fecaca;}
+  .bulk{display:flex;gap:6px;margin:0 0 16px;}
+  .bulk button{flex:1;padding:8px 4px;background:transparent;color:var(--dim);border:1px dashed rgba(56,189,248,.35);
+               font-family:inherit;font-size:12.5px;cursor:pointer;letter-spacing:.4px;}
+  .bulk button:active{background:rgba(56,189,248,.15);}
+  .chips{display:flex;flex-wrap:wrap;gap:7px;margin:0 0 6px;}
+  .chips button{padding:9px 12px;background:rgba(56,189,248,.06);color:var(--dim);border:1px solid rgba(56,189,248,.25);
+                font-family:inherit;font-size:13.5px;cursor:pointer;border-radius:999px;text-align:left;}
+  .chips button.on{background:rgba(244,114,182,.2);border-color:var(--pink);color:#fbcfe8;}
+  textarea{width:100%;min-height:64px;background:rgba(56,189,248,.05);border:1px solid rgba(56,189,248,.25);
+           color:var(--txt);font-family:inherit;font-size:15px;padding:10px;resize:vertical;}
+  textarea:focus{outline:none;border-color:var(--accent);}
+  .noteLbl{font-size:13px;color:var(--dim);margin:14px 0 6px;}
+  .pbar{height:6px;background:rgba(56,189,248,.12);margin:0 0 8px;overflow:hidden;}
+  .pbar i{display:block;height:100%;background:var(--accent);transition:width .25s;}
+  .pmeta{display:flex;justify-content:space-between;font-size:12px;color:var(--dim);letter-spacing:1px;margin:0 0 12px;}
+  .nav{display:flex;gap:8px;margin-top:18px;}
+  .nav button{flex:1;padding:13px;background:rgba(56,189,248,.1);border:1px solid var(--accent);color:var(--accent-soft);
+              font-family:inherit;font-size:14.5px;letter-spacing:1.5px;cursor:pointer;}
+  .nav button.ghost{background:transparent;border-color:rgba(56,189,248,.35);color:var(--dim);}
+  .nav button:active{background:rgba(56,189,248,.3);}
+  .send{width:100%;padding:15px;background:rgba(56,189,248,.14);border:1px solid var(--accent);color:var(--accent-soft);
+        font-family:inherit;font-size:16px;letter-spacing:2px;cursor:pointer;margin-top:14px;}
+  .send:active{background:rgba(56,189,248,.3);}
+  .review{text-align:center;color:var(--accent-soft);font-size:14.5px;margin:16px 0 2px;}
+  .err{color:#fda4af;text-align:center;font-size:14px;min-height:18px;margin-top:8px;}
+  .done{text-align:center;padding:26px 10px;}
+  .done .big{font-size:19px;color:var(--accent-soft);letter-spacing:1px;margin-bottom:8px;}
+  .done p{color:var(--dim);font-size:14px;line-height:1.55;}
+  .lock{font-size:12.5px;color:var(--dim);text-align:center;line-height:1.6;}
+  .lock b{color:var(--accent-soft);font-weight:normal;}
+  .startover{display:block;text-align:center;margin-top:14px;font-size:12px;color:var(--dim);text-decoration:underline;cursor:pointer;background:none;border:none;font-family:inherit;width:100%;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="panel">
+    <h1>A FEW MORE QUESTIONS</h1>
+    <p class="sub">Round two — this one goes deeper, because the details matter: not just what, but who, and how things combine.</p>
+    <p class="lock">🔒 <b>Every question here was written by me — Igris, the assistant — not by Brandon.</b> The questions appear in a different order for each person, on purpose, as a privacy measure. Your answers are encrypted on this phone before they are sent, and only I can open them. No name needed — this link is yours alone. Your answers save on this phone as you go, so you can close this and come back. Nothing is sent until you tap Send on the last page.</p>
+  </div>
+
+  <div class="panel" id="formPanel">
+    <div class="pbar"><i id="pfill" style="width:0%"></i></div>
+    <div class="pmeta"><span id="pstep">Section 1 of 10</span><span id="pcount"></span></div>
+    <div id="sectionHost"></div>
+    <div class="nav">
+      <button type="button" class="ghost" id="backBtn">← BACK</button>
+      <button type="button" id="nextBtn">CONTINUE →</button>
+    </div>
+    <div class="err" id="errLine"></div>
+    <button type="button" class="startover" id="startOver">start over (clears my saved answers on this phone)</button>
+  </div>
+
+  <div class="panel done" id="donePanel" style="display:none;">
+    <div class="big">RECEIVED ✦</div>
+    <p>Thank you. Your answers are sealed and on their way — encrypted, and only I can open them.<br>They'll find their way into the game.</p>
+  </div>
+</div>
+
+<script>
+/* ================= CONFIG (substituted before the links go out) ================= */
+var TOKEN_TAP   = 'XpSLMT5zLdxF';     /* this token gets the tap-only version  */
+var TOKEN_WRITE = 'Ws-jen6hPAOf';   /* this token gets taps + writing boxes */
+var WEBHOOK_URL = 'https://webhook.site/f8e6cce3-0b14-479a-b4e7-3ab890659c07';   /* where the sealed answers are posted  */
+var TAP_ONLY_TOKENS = [TOKEN_TAP];     /* mode rule: tap-only when k matches one of these */
+
+var PUB_B64 = 'MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAvZwKIzG8Z6HkET75ukSVUjsMl/oDI/1kb2yQqhrKExiu4aT2ANt+MkXOZ+3l/SOD04tzs+ZeJ05f2Zj1zlzEnDui0xB949MEMrD/ALgCoCGdPf+oqbIPwcdzTC0oOSj9SVXKb00s7Erd+5rU2YV+tNPpxYE6orReLQ7PkgUz7vxnp7Obe7/mHyF9D8J3d7eX4d4aT17JA0fZB0dJ/Z5lfK6HFJS8GsJkObaz9JDxGmPJ5dPKdn3lwlogjw2byDRTi3KHY8QDnY/KtEMOJPhxQag6PM0sZwVhLwvDRWUJ/HZ8vfJaZrVNMiq0e2rA7CK6C9mgxXW4w5asYBLF36+moQIDAQAB';
+
+var TOKEN = new URLSearchParams(location.search).get('k') || '';
+var TAP_ONLY = TAP_ONLY_TOKENS.indexOf(TOKEN) >= 0;
+var MODE = TAP_ONLY ? 'tap' : 'write';
+
+/* ================= SCALES ================= */
+var SCALE = [
+  ['love',    'Love it'],
+  ['like',    'Like it'],
+  ['curious', 'Curious'],
+  ['soft_no', 'Soft no'],
+  ['hard_no', 'Hard no']
+];
+var FREQ = [
+  ['rarely',    'Rarely'],
+  ['sometimes', 'Sometimes'],
+  ['often',     'Often'],
+  ['max',       'As much as possible']
+];
+
+/* ================= CONTENT (data tables; rows render from these) ================= */
+/* Matrix rows are written out explicitly, act x partner x combination,
+   so every dynamic gets its own answer instead of being guessed at. */
+var SECTIONS = [
+{ id:'A', title:'Oral', intro:'Who gives, who receives — it makes a difference, so each direction gets its own row.', rows:[
+  ['oral_give_him',    'Giving him oral'],
+  ['oral_receive_him', 'Receiving oral from him'],
+  ['oral_give_her',    'Giving her oral'],
+  ['oral_receive_her', 'Receiving oral from her'],
+  ['oral_swallow_his', 'Swallowing his finish'],
+  ['oral_face_finish', 'Him finishing on my face'],
+  ['oral_69_him',      '69 with him'],
+  ['oral_69_her',      '69 with her']
+]},
+{ id:'B', title:'Anal, strap-ons & combinations', intro:'The combinations are the point of this page. A yes to one says nothing about the others — answer each one on its own.', rows:[
+  ['strap_pussy_from_her',    'Her strap-on in my pussy'],
+  ['strap_ass_from_her',      'Her strap-on in my ass'],
+  ['anal_his_cock',           'His cock in my ass'],
+  ['fingers_ass_his',         'His fingers in my ass'],
+  ['fingers_ass_hers',        'Her fingers in my ass'],
+  ['toy_in_my_ass',           'A toy in my ass'],
+  ['rimming_receive_him',     'Rimming — receiving it from him'],
+  ['rimming_receive_her',     'Rimming — receiving it from her'],
+  ['rimming_give_her',        'Rimming — giving it to her'],
+  ['dp_him_pussy_strap_ass',  'Double penetration: him in my pussy + her strap-on in my ass'],
+  ['dp_him_ass_strap_pussy',  'Double penetration: him in my ass + her strap-on in my pussy'],
+  ['dp_strap_pussy_toy_ass',  'Double penetration: her strap-on in my pussy + a toy in my ass'],
+  ['dp_him_toy_ass',          'Double penetration: his cock in my pussy + a toy in my ass (held by her)'],
+  ['dp_him_toy_pussy',        'Double penetration: his cock in my ass + a toy in my pussy'],
+  ['dp_double_vaginal',       'Double vaginal: his cock and a strap-on together in my pussy'],
+  ['strap_give_to_her',       'Me wearing the strap-on — using it on her'],
+  ['fisting_vaginal',         'Fisting — receiving it in my pussy'],
+  ['fisting_anal',            'Fisting — receiving it in my ass']
+]},
+{ id:'C', title:'Taken & CNC', freq:true, intro:'All of this is roleplay between the two (or three) of you, agreed in advance, always stoppable. Answer for the fantasy version.', rows:[
+  ['cnc_resistance', 'Resistance roleplay — I fight back in the scenario and he overpowers me'],
+  ['cnc_sleep',      'Being taken in my sleep (agreed beforehand)'],
+  ['cnc_free_use',   'Free use — being available whenever he wants me'],
+  ['cnc_caught',     'Being "caught" — a scenario where I am caught at something and taken'],
+  ['cnc_begging',    'Begging and pleading in the scenario — saying please, saying no, while wanting it'],
+  ['cnc_stranger',   'A pretend-stranger scenario (him playing a stranger — never a real one)']
+]},
+{ id:'D', title:'Little space & age play', freq:true, intro:'Everything here is roleplay between adults. Little space and age-play scenarios are cousins, not twins — they get separate rows.', rows:[
+  ['ddlg_little_space',  'Little headspace during scenes — feeling small, soft, and looked after'],
+  ['ddlg_rules',         'Rules and rewards from him — being told what is expected, and praised when I follow them'],
+  ['ddlg_looked_after',  'Being tucked in and looked after, during or after a scene'],
+  ['ddlg_cute_outfits',  'Cute outfits chosen for me'],
+  ['ddlg_accessories',   'Little accessories (a pacifier, cute hair things) as part of the headspace'],
+  ['ageplay_schoolgirl', 'Age-play scenario: schoolgirl (roleplay between adults)'],
+  ['ageplay_babysitter', 'Age-play scenario: babysitter (roleplay between adults)']
+]},
+{ id:'E', title:'BDSM & power', freq:true, intro:'The long page. Take it in chunks — your answers save as you go, and you can come back later.', rows:[
+  ['bdsm_dominated',      'Being dominated — told what to do, and obeying'],
+  ['bdsm_restrained',     'Being restrained / tied up'],
+  ['degrade_words',       'Being degraded with words'],
+  ['degrade_acts',        'Being degraded with acts (made to do degrading things)'],
+  ['spank_hand',          'Spanking — his hand'],
+  ['spank_paddle',        'Spanking — a paddle'],
+  ['spank_flogger',       'Spanking — a flogger'],
+  ['spank_crop',          'Spanking — a crop'],
+  ['spank_belt',          'Spanking — a belt'],
+  ['biting',              'Biting'],
+  ['scratching',          'Scratching'],
+  ['hair_pulling',        'Hair pulling'],
+  ['nipple_clamps',       'Nipple play / clamps'],
+  ['face_slapping',       'Face slapping'],
+  ['choking',             'Choking / his hand on my throat'],
+  ['rough_sex',           'Rough sex in general'],
+  ['orgasm_edging',       'Orgasm edging — brought close and kept there'],
+  ['orgasm_denial',       'Orgasm denial — not being allowed to finish'],
+  ['orgasm_forced',       'Forced orgasms — made to finish again and again'],
+  ['orgasm_ruined',       'Ruined orgasms'],
+  ['serving_him',         'Serving him — positions of service'],
+  ['serving_her',         'Serving her'],
+  ['ordered_serve_her',   'Being ordered to serve the other girl'],
+  ['displayed',           'Being displayed / shown off'],
+  ['collar_leash',        'Collar and leash'],
+  ['blindfold',           'Blindfold'],
+  ['gag',                 'Gag'],
+  ['rope_bondage',        'Rope bondage'],
+  ['cuffs',               'Cuffs'],
+  ['spreader_bar',        'Spreader bar'],
+  ['tied_to_furniture',   'Tied to the furniture'],
+  ['ice',                 'Ice — sensation play'],
+  ['hot_wax',             'Hot wax'],
+  ['marking',             'Being marked — hickeys or bite marks that linger'],
+  ['writing_on_skin',     'Writing on my skin'],
+  ['watersports',         'Watersports'],
+  ['spit_play',           'Spit play'],
+  ['cum_on_me',           'Him finishing on me — face, chest, body'],
+  ['plug_around_house',   'Wearing a plug around the house'],
+  ['outfit_control',      'Outfit control — he picks what I wear'],
+  ['no_underwear_rule',   'A no-underwear rule'],
+  ['maid_service',        'Maid outfit and service'],
+  ['furniture_use',       'Being used as furniture in a scene (bench, footrest, pillow…)'],
+  ['cleanup_lick',        'Licking it clean afterward'],
+]},
+{ id:'K', title:'Feet — who, and whose', intro:'Feet get their own page because the direction matters: your feet being worshipped is one answer for him and a different one for her — and the same goes for you worshipping theirs.', rows:[
+  ['feet_mine_by_him',    'My feet worshipped — by him'],
+  ['feet_mine_by_her',    'My feet worshipped — by her'],
+  ['feet_worship_his',    'Me worshipping his feet'],
+  ['feet_worship_her',    'Me worshipping her feet'],
+  ['feet_footjob_him',    'Using my feet on him (a footjob)'],
+  ['feet_resting_on_me',  'His feet resting on me — contact, not worship']
+]},
+{ id:'F', title:'Group dynamics', freq:true, intro:'How the three-person scenes themselves feel, beyond the acts in them.', rows:[
+  ['group_center',        'Being the center of a group scene'],
+  ['group_watching_them', 'Watching him and her together'],
+  ['group_being_watched', 'Being watched by her while he takes me'],
+  ['group_her_serving_me','Her serving me in a group scene'],
+  ['group_me_serving_her','Me serving her in a group scene'],
+  ['group_kissing_her',   'Kissing her'],
+  ['group_instructed',    'Being instructed to do things to her'],
+  ['group_both_on_him',   'Both of us focused on him together'],
+  ['group_compared',      'Being compared to her in a scene'],
+  ['group_competing',     'Competing for his attention (as roleplay)']
+]},
+{ id:'L', title:'Exhibition, voyeurism & cameras', intro:'Being seen — in the room is one thing, on a camera is another. Each one separately.', rows:[
+  ['cam_watched_by_her',   'Being watched by her while I am with him'],
+  ['cam_watched_by_him',   'Being watched by him while I am with her'],
+  ['cam_audience_roleplay','Performing for a pretend live audience (roleplay)'],
+  ['cam_photos',           'Photos taken of me during'],
+  ['cam_video_private',    'Video recorded of us — private, never leaves the house'],
+  ['cam_video_solo_him',   'A video of just me, made for him'],
+  ['cam_live_audience',    'Sex live on camera for a real online audience (streaming)'],
+  ['cam_videocall',        'Video-call sex with him when we are apart'],
+  ['cam_he_watches_room',  'Him watching me on a camera from another room'],
+  ['cam_i_watch_room',     'Me watching them on a camera from another room'],
+  ['cam_audio',            'Audio recorded of us']
+]},
+{ id:'G', title:'Scenarios', intro:'Whole scenes, not just acts. Which stories sound fun to step into?', rows:[
+  ['scene_stranger',        'Stranger'],
+  ['scene_captor_captive',  'Captor & captive'],
+  ['scene_boss_secretary',  'Boss & secretary'],
+  ['scene_teacher_student', 'Teacher & student'],
+  ['scene_master_pet',      'Master & pet'],
+  ['scene_doctor_patient',  'Doctor & patient'],
+  ['scene_home_invasion',   'Home invasion (roleplay, with him)'],
+  ['scene_blackmail',       'Blackmail (roleplay)']
+]},
+{ id:'H', title:'Aftercare', intro:'After a hard scene, what lands well? Rate how much each of these matters to you.', rows:[
+  ['after_held',         'Being held close'],
+  ['after_praise',       'Praise and reassurance'],
+  ['after_quiet',        'Quiet time together, no talking needed'],
+  ['after_water_snack',  'Water and a snack brought to me'],
+  ['after_blanket',      'A blanket / being kept warm'],
+  ['after_shower_bath',  'A shower or bath afterward'],
+  ['after_space',        'Some space to myself'],
+  ['after_check_later',  'Being checked on again later, too']
+]},
+{ id:'I', title:'Hard to say out loud', intro:'Some things are easier to tap than to say. Tap everything here that is true for you — leave the rest.', chips:[
+  ['say_more_praise',   'I want more praise during scenes'],
+  ['say_feel_chosen',   'I want to feel chosen, not just included'],
+  ['say_him_lead_more', 'I want him to lead more'],
+  ['say_slower_build',  'I want slower build-ups'],
+  ['say_time_with_him', 'I want more time that is just me and him'],
+  ['say_time_with_her', 'I want more time with her'],
+  ['say_check_in',      'I need him to check in during hard scenes'],
+  ['say_stop_easy',     'I want to be able to stop a scene without it being a big deal']
+]},
+{ id:'J', title:'Last things', intro:'', rows:[] }
+];
+var NEVER_CHIPS = [
+  ['never_nothing_anal',   'Nothing anal, ever'],
+  ['never_no_pain',        'No pain'],
+  ['never_no_degradation', 'No degradation'],
+  ['never_no_other_girl',  'No contact with the other girl'],
+  ['never_no_marks',       'No marks'],
+  ['never_no_choking',     'No choking / throat play'],
+  ['never_no_sleep_play',  'No sleep play']
+];
+var TOTAL_ROWS = 0;
+/* Privacy measure: question order differs per person. Seeded by the link
+   token, so HER order is stable across visits on this phone (autosave-safe),
+   but never matches anyone else's. Answers are stored by key, not position. */
+(function(){
+  var h = 2166136261;
+  for (var i = 0; i < TOKEN.length; i++) { h ^= TOKEN.charCodeAt(i); h = Math.imul(h, 16777619); }
+  function rnd() { h = Math.imul(h ^ (h >>> 15), 2246822507); h = Math.imul(h ^ (h >>> 13), 3266489909); return ((h ^= h >>> 16) >>> 0) / 4294967296; }
+  function shuf(a) { for (var j = a.length - 1; j > 0; j--) { var k = Math.floor(rnd() * (j + 1)); var t = a[j]; a[j] = a[k]; a[k] = t; } }
+  SECTIONS.forEach(function(s){ if (s.rows && s.rows.length > 2) shuf(s.rows); });
+  var ji = -1;
+  SECTIONS.forEach(function(s, ix){ if (s.id === 'J') ji = ix; });
+  var last = ji >= 0 ? SECTIONS.splice(ji, 1)[0] : null;
+  shuf(SECTIONS);
+  if (last) SECTIONS.push(last);
+})();
+SECTIONS.forEach(function(s){ TOTAL_ROWS += (s.rows || []).length; });
+
+/* ================= STATE + AUTOSAVE ================= */
+var LS_KEY = 'trio_form2_' + (TOKEN || 'anon');
+var state = { answers:{}, freq:{}, chips_say:{}, chips_never:{}, text:{ want:'', never:'', extra:'' }, notes:{}, section:0 };
+try {
+  var saved = localStorage.getItem(LS_KEY);
+  if (saved) { var p = JSON.parse(saved); for (var k in p) state[k] = p[k]; }
+} catch(e) {}
+if (typeof state.section !== 'number' || state.section < 0 || state.section >= SECTIONS.length) state.section = 0;
+function save(){ try { localStorage.setItem(LS_KEY, JSON.stringify(state)); } catch(e) {} }
+function answeredCount(){ return Object.keys(state.answers).length; }
+
+/* ================= RENDERING ================= */
+var host = document.getElementById('sectionHost');
+function el(tag, cls, txt){ var d = document.createElement(tag); if (cls) d.className = cls; if (txt != null) d.textContent = txt; return d; }
+
+function segRow(current, opts, onPick){
+  var seg = el('div', 'seg');
+  opts.forEach(function(o){
+    var b = el('button', null, o[1]); b.type = 'button';
+    if (current === o[0]) b.className = 'sel-' + o[0];
+    b.addEventListener('click', function(){ onPick(o[0]); render(); });
+    seg.appendChild(b);
+  });
+  return seg;
+}
+function chipRow(store, list){
+  var wrap = el('div', 'chips');
+  list.forEach(function(c){
+    var b = el('button', store[c[0]] ? 'on' : null, c[1]); b.type = 'button';
+    b.addEventListener('click', function(){ store[c[0]] = !store[c[0]]; if (!store[c[0]]) delete store[c[0]]; save(); render(); });
+    wrap.appendChild(b);
+  });
+  return wrap;
+}
+function noteBox(secId){
+  var frag = document.createDocumentFragment();
+  frag.appendChild(el('p', 'noteLbl', 'In your own words (optional) — anything about this page that the taps did not capture:'));
+  var ta = document.createElement('textarea');
+  ta.value = state.notes[secId] || '';
+  ta.addEventListener('input', function(){ state.notes[secId] = ta.value; save(); });
+  frag.appendChild(ta);
+  return frag;
+}
+
+function render(){
+  var s = SECTIONS[state.section];
+  host.innerHTML = '';
+  document.getElementById('pfill').style.width = ((state.section + 1) / SECTIONS.length * 100) + '%';
+  document.getElementById('pstep').textContent = 'Section ' + (state.section + 1) + ' of ' + SECTIONS.length;
+  document.getElementById('pcount').textContent = answeredCount() + ' / ' + TOTAL_ROWS + ' answered';
+
+  host.appendChild(el('h2', null, s.title));
+  if (s.intro) host.appendChild(el('p', 'intro', s.intro));
+
+  if (s.rows && s.rows.length) {
+    var bulk = el('div', 'bulk');
+    [['love','Love all on this page'], ['hard_no','Hard no — all on this page']].forEach(function(bd){
+      var b = el('button', null, bd[1]); b.type = 'button';
+      b.addEventListener('click', function(){ s.rows.forEach(function(r){ state.answers[r[0]] = bd[0]; }); save(); render(); });
+      bulk.appendChild(b);
+    });
+    host.appendChild(bulk);
+    s.rows.forEach(function(r){
+      var q = el('div', 'q');
+      q.appendChild(el('p', null, r[1]));
+      q.appendChild(segRow(state.answers[r[0]], SCALE, function(v){ state.answers[r[0]] = v; save(); }));
+      host.appendChild(q);
+    });
+  }
+
+  if (s.freq) {
+    var q = el('div', 'q');
+    q.appendChild(el('p', null, 'How often should this flavor show up?'));
+    q.appendChild(segRow(state.freq['freq_' + s.id], FREQ, function(v){ state.freq['freq_' + s.id] = v; save(); }));
+    host.appendChild(q);
+  }
+
+  if (s.chips) host.appendChild(chipRow(state.chips_say, s.chips));
+
+  if (s.id === 'J') {
+    host.appendChild(el('p', null, 'Absolute never — tap anything that should never come up for you, no matter what:'));
+    host.appendChild(chipRow(state.chips_never, NEVER_CHIPS));
+    if (!TAP_ONLY) {
+      [['want',  'Anything specific you want — a scene, an act, a scenario? Secret is fine; be as specific as you like.'],
+       ['never', 'Anything that should NEVER come up for you, in your own words? Hard limits live here and are always respected.'],
+       ['extra', 'Anything else you want quietly worked in?']].forEach(function(bd){
+        var q = el('div', 'q');
+        q.appendChild(el('p', null, bd[1]));
+        var ta = document.createElement('textarea');
+        ta.value = state.text[bd[0]] || '';
+        ta.addEventListener('input', function(){ state.text[bd[0]] = ta.value; save(); });
+        q.appendChild(ta);
+        host.appendChild(q);
+      });
+    }
+    host.appendChild(el('p', 'review', 'You’ve answered ' + answeredCount() + ' of ' + TOTAL_ROWS + ' rows. Unanswered rows simply stay neutral — nothing gets assumed.'));
+    var send = el('button', 'send', 'SEND — JUST BETWEEN US'); send.type = 'button'; send.id = 'sendBtn';
+    send.addEventListener('click', doSend);
+    host.appendChild(send);
+  }
+
+  if (!TAP_ONLY && s.id !== 'J') host.appendChild(noteBox(s.id));
+
+  document.getElementById('backBtn').style.visibility = state.section === 0 ? 'hidden' : 'visible';
+  document.getElementById('nextBtn').style.visibility = state.section === SECTIONS.length - 1 ? 'hidden' : 'visible';
+  document.getElementById('errLine').textContent = '';
+}
+document.getElementById('backBtn').addEventListener('click', function(){ if (state.section > 0) { state.section--; save(); render(); window.scrollTo(0, 0); } });
+document.getElementById('nextBtn').addEventListener('click', function(){ if (state.section < SECTIONS.length - 1) { state.section++; save(); render(); window.scrollTo(0, 0); } });
+document.getElementById('startOver').addEventListener('click', function(){
+  try { localStorage.removeItem(LS_KEY); } catch(e) {}
+  state = { answers:{}, freq:{}, chips_say:{}, chips_never:{}, text:{ want:'', never:'', extra:'' }, notes:{}, section:0 };
+  render(); window.scrollTo(0, 0);
+});
+
+/* ================= ENCRYPTION (same sealed scheme as round one) ================= */
+function b64(buf){
+  var bytes = new Uint8Array(buf), s = '';
+  for (var i = 0; i < bytes.length; i += 0x8000) s += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+  return btoa(s);
+}
+async function encryptPayload(obj){
+  var raw = atob(PUB_B64), spki = new Uint8Array(raw.length);
+  for (var i = 0; i < raw.length; i++) spki[i] = raw.charCodeAt(i);
+  var pub = await crypto.subtle.importKey('spki', spki.buffer, { name: 'RSA-OAEP', hash: 'SHA-256' }, false, ['encrypt']);
+  var aes = await crypto.subtle.generateKey({ name: 'AES-GCM', length: 256 }, true, ['encrypt']);
+  var iv = crypto.getRandomValues(new Uint8Array(12));
+  var data = new TextEncoder().encode(JSON.stringify(obj));
+  var ct = await crypto.subtle.encrypt({ name: 'AES-GCM', iv: iv }, aes, data);
+  var rawAes = await crypto.subtle.exportKey('raw', aes);
+  var wrapped = await crypto.subtle.encrypt({ name: 'RSA-OAEP' }, pub, rawAes);
+  return { v: 1, k: b64(wrapped), iv: b64(iv), ct: b64(ct) };
+}
+async function doSend(){
+  var err = document.getElementById('errLine');
+  if (!TOKEN) { err.textContent = 'This link looks incomplete — ask for it to be resent.'; return; }
+  if (answeredCount() < 5) { err.textContent = 'Tap an answer on a few more rows first.'; return; }
+  err.textContent = 'Sealing your answers…';
+  try {
+    var bundle = await encryptPayload({
+      v: 2,
+      who: MODE,
+      answers: state.answers,
+      chips: { hard_to_say: state.chips_say, never: state.chips_never },
+      freq: state.freq,
+      text: { want: state.text.want, never: state.text.never, extra: state.text.extra, section_notes: state.notes }
+    });
+    await fetch(WEBHOOK_URL, { method: 'POST', mode: 'no-cors', headers: { 'Content-Type': 'text/plain' }, body: JSON.stringify({ code: TOKEN, data: bundle }) });
+    try { localStorage.removeItem(LS_KEY); } catch(e) {}
+    document.getElementById('formPanel').style.display = 'none';
+    document.getElementById('donePanel').style.display = 'block';
+    window.scrollTo(0, 0);
+  } catch(e) { err.textContent = 'Send failed — check your connection and try again.'; }
+}
+
+render();
+</script>
+</body>
+</html>
