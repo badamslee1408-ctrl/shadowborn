@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Just for you</title>
+<style>
+  :root{
+    --bg:#050810; --panel:rgba(10,18,38,.88); --accent:#38bdf8; --accent-soft:#bae6fd;
+    --pink:#f472b6; --line:rgba(56,189,248,.4); --txt:#e2e8f0; --dim:#94a3b8;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;background:radial-gradient(120% 90% at 50% 0%, #0a1428 0%, var(--bg) 60%);color:var(--txt);
+       font-family:Georgia,'Times New Roman',serif;padding:18px 14px 40px;min-height:100vh;}
+  .wrap{max-width:560px;margin:0 auto;}
+  .panel{background:var(--panel);border:1px solid var(--line);padding:20px 18px;margin-bottom:14px;
+         clip-path:polygon(14px 0,100% 0,100% calc(100% - 14px),calc(100% - 14px) 100%,0 100%,0 14px);
+         box-shadow:0 0 24px rgba(56,189,248,.15), inset 0 0 32px rgba(56,189,248,.05);}
+  h1{font-size:19px;letter-spacing:3px;text-align:center;color:var(--accent-soft);margin:2px 0 6px;font-weight:normal;}
+  .sub{text-align:center;color:var(--dim);font-size:13.5px;line-height:1.55;margin:0 0 4px;}
+  .q{margin:0 0 16px;}
+  .q p{margin:0 0 7px;font-size:15.5px;line-height:1.4;}
+  .seg{display:flex;gap:6px;}
+  .seg button{flex:1;padding:10px 4px;background:rgba(56,189,248,.06);color:var(--dim);border:1px solid rgba(56,189,248,.25);
+              font-family:inherit;font-size:13.5px;cursor:pointer;letter-spacing:.4px;}
+  .seg button.sel-love{background:rgba(244,114,182,.22);border-color:var(--pink);color:#fbcfe8;}
+  .seg button.sel-ok{background:rgba(56,189,248,.2);border-color:var(--accent);color:var(--accent-soft);}
+  .seg button.sel-no{background:rgba(100,116,139,.25);border-color:#64748b;color:#e2e8f0;}
+  textarea{width:100%;min-height:74px;background:rgba(56,189,248,.05);border:1px solid rgba(56,189,248,.25);
+           color:var(--txt);font-family:inherit;font-size:15px;padding:10px;resize:vertical;}
+  textarea:focus{outline:none;border-color:var(--accent);}
+  .send{width:100%;padding:15px;background:rgba(56,189,248,.14);border:1px solid var(--accent);color:var(--accent-soft);
+        font-family:inherit;font-size:16px;letter-spacing:2px;cursor:pointer;}
+  .send:active{background:rgba(56,189,248,.3);}
+  .err{color:#fda4af;text-align:center;font-size:14px;min-height:18px;margin-top:8px;}
+  .done{text-align:center;padding:26px 10px;}
+  .done .big{font-size:19px;color:var(--accent-soft);letter-spacing:1px;margin-bottom:8px;}
+  .done p{color:var(--dim);font-size:14px;line-height:1.55;}
+  .lock{font-size:12.5px;color:var(--dim);text-align:center;line-height:1.6;}
+  .lock b{color:var(--accent-soft);font-weight:normal;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="panel">
+    <h1>A FEW QUESTIONS</h1>
+    <p class="sub">This is for the dice game — your honest answers shape what the game can roll for you.</p>
+    <p class="lock">🔒 <b>Brandon never sees these answers.</b> They go only to his assistant, Igris, who builds them into the game quietly. No name needed — this link is yours alone. Answer as honestly as you like; that includes the secret stuff.</p>
+  </div>
+
+  <div class="panel" id="formPanel">
+    <div id="questions"></div>
+
+    <div class="q">
+      <p>Anything specific you want in the game — a scene, an act, a scenario?</p>
+      <textarea id="want" placeholder="Secret is fine. Be as specific as you want."></textarea>
+    </div>
+    <div class="q">
+      <p>Anything that should NEVER come up for you?</p>
+      <textarea id="never" placeholder="Hard limits live here. They will be respected by the game, always."></textarea>
+    </div>
+    <div class="q">
+      <p>Anything else you want quietly worked in?</p>
+      <textarea id="extra" placeholder="Optional."></textarea>
+    </div>
+
+    <button class="send" id="sendBtn">SEND — JUST BETWEEN US</button>
+    <div class="err" id="errLine"></div>
+  </div>
+
+  <div class="panel done" id="donePanel" style="display:none;">
+    <div class="big">RECEIVED ✦</div>
+    <p>Thank you. Your answers are with Igris now — and only Igris.<br>They'll find their way into the game. Brandon won't be told what you said.</p>
+  </div>
+</div>
+
+<script>
+var ENDPOINT = 'https://webhook.site/44acb7a1-f06a-426e-96b1-7f004c606b3b';
+var PUB_B64 = 'MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAvZwKIzG8Z6HkET75ukSVUjsMl/oDI/1kb2yQqhrKExiu4aT2ANt+MkXOZ+3l/SOD04tzs+ZeJ05f2Zj1zlzEnDui0xB949MEMrD/ALgCoCGdPf+oqbIPwcdzTC0oOSj9SVXKb00s7Erd+5rU2YV+tNPpxYE6orReLQ7PkgUz7vxnp7Obe7/mHyF9D8J3d7eX4d4aT17JA0fZB0dJ/Z5lfK6HFJS8GsJkObaz9JDxGmPJ5dPKdn3lwlogjw2byDRTi3KHY8QDnY/KtEMOJPhxQag6PM0sZwVhLwvDRWUJ/HZ8vfJaZrVNMiq0e2rA7CK6C9mgxXW4w5asYBLF36+moQIDAQAB';
+var CATS = [
+  ['oral_give_him',  'Giving oral — to him'],
+  ['oral_give_her',  'Giving oral — to her'],
+  ['oral_receive',   'Receiving oral'],
+  ['anal_receive',   'Anal — receiving it'],
+  ['anal_give_her',  'Anal — giving it to her (strap-on)'],
+  ['toys_on_me',     'Toys used on me'],
+  ['degraded',       'Being degraded / talked down to (as the sub)'],
+  ['degrade_her',    'Degrading / making the other girl serve (feet-kissing, service)'],
+  ['taken',          'Being taken — forced roleplay, consensual'],
+  ['milk',           'Breast-milk play'],
+  ['feet',           'Feet — mine worshipped, or kissing feet'],
+  ['service',        'Service positions — being the one who serves in a group scene'],
+  ['restrained',     'Being restrained / tied up'],
+  ['furniture',      'Being used as furniture in a scene (bench, footrest, pillow…)'],
+  ['center',         'Group scenes where I am the center of attention'],
+  ['finish_on_me',   'Him finishing on me (face / chest / body)'],
+  ['cleanup',        'Licking it clean afterward — him, or the other girl']
+];
+var answers = {};
+var host = document.getElementById('questions');
+CATS.forEach(function(c){
+  var d = document.createElement('div'); d.className = 'q';
+  var p = document.createElement('p'); p.textContent = c[1]; d.appendChild(p);
+  var seg = document.createElement('div'); seg.className = 'seg';
+  [['love','Love it'],['ok','Curious'],['no','Not for me']].forEach(function(o){
+    var b = document.createElement('button'); b.type = 'button'; b.textContent = o[1];
+    b.addEventListener('click', function(){
+      answers[c[0]] = o[0];
+      seg.querySelectorAll('button').forEach(function(x){ x.className = ''; });
+      b.className = 'sel-' + o[0];
+    });
+    seg.appendChild(b);
+  });
+  d.appendChild(seg); host.appendChild(d);
+});
+/* frequency question */
+var fq = document.createElement('div'); fq.className = 'q';
+var fp = document.createElement('p'); fp.textContent = 'How often should your "Love it" picks come up?'; fq.appendChild(fp);
+var fseg = document.createElement('div'); fseg.className = 'seg';
+[['even','Same as everything else'],['more','A little more often']].forEach(function(o){
+  var b = document.createElement('button'); b.type = 'button'; b.textContent = o[1];
+  b.addEventListener('click', function(){
+    answers['_weight'] = o[0];
+    fseg.querySelectorAll('button').forEach(function(x){ x.className = ''; });
+    b.className = 'sel-ok';
+  });
+  fseg.appendChild(b);
+});
+fq.appendChild(fseg); host.appendChild(fq);
+
+function b64(buf){
+  var bytes = new Uint8Array(buf), s = '';
+  for (var i = 0; i < bytes.length; i += 0x8000) s += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+  return btoa(s);
+}
+async function encryptPayload(obj){
+  var raw = atob(PUB_B64), spki = new Uint8Array(raw.length);
+  for (var i = 0; i < raw.length; i++) spki[i] = raw.charCodeAt(i);
+  var pub = await crypto.subtle.importKey('spki', spki.buffer, { name: 'RSA-OAEP', hash: 'SHA-256' }, false, ['encrypt']);
+  var aes = await crypto.subtle.generateKey({ name: 'AES-GCM', length: 256 }, true, ['encrypt']);
+  var iv = crypto.getRandomValues(new Uint8Array(12));
+  var data = new TextEncoder().encode(JSON.stringify(obj));
+  var ct = await crypto.subtle.encrypt({ name: 'AES-GCM', iv: iv }, aes, data);
+  var rawAes = await crypto.subtle.exportKey('raw', aes);
+  var wrapped = await crypto.subtle.encrypt({ name: 'RSA-OAEP' }, pub, rawAes);
+  return { v: 1, k: b64(wrapped), iv: b64(iv), ct: b64(ct) };
+}
+document.getElementById('sendBtn').addEventListener('click', async function(){
+  var k = new URLSearchParams(location.search).get('k');
+  var err = document.getElementById('errLine');
+  if (!k) { err.textContent = 'This link looks incomplete — ask for it to be resent.'; return; }
+  if (Object.keys(answers).length < 5) { err.textContent = 'Tap an answer on a few more questions first.'; return; }
+  err.textContent = 'Sealing your answers…';
+  try {
+    var bundle = await encryptPayload({
+      cats: answers,
+      want: document.getElementById('want').value.trim(),
+      never: document.getElementById('never').value.trim(),
+      extra: document.getElementById('extra').value.trim()
+    });
+    await fetch(ENDPOINT, { method: 'POST', mode: 'no-cors', headers: { 'Content-Type': 'text/plain' }, body: JSON.stringify({ code: k, data: bundle }) });
+    document.getElementById('formPanel').style.display = 'none';
+    document.getElementById('donePanel').style.display = 'block';
+    window.scrollTo(0, 0);
+  } catch(e) { err.textContent = 'Send failed — check your connection and try again.'; }
+});
+</script>
+</body>
+</html>
