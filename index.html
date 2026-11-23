@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Shadowborn — Create a Stencil Online</title>
 <!--
-  Shadowborn Stencil Maker v5.0
+  Shadowborn Stencil Maker v5.3
   Editor layout and control model follow stencilmaker.org's editor:
   header + left tool rail + compare canvas + right control panel.
   Engine (XDoG / Sauvola / tone bands) is our own code, on-device only.
@@ -735,6 +735,27 @@ function labelComponents(mask, w, h, value){
   return {labels, sizes, count};
 }
 
+/* Line-mode denoise: plain size kill + hole fill ONLY. Both operations
+   are inclusion-monotone (ink components only grow as Detail rises;
+   holes only shrink), so the output is nested: raising Detail can add
+   lines but can never remove one. The ring rule in despeckleMask is
+   deliberately NOT used here — a new strand crossing a loop's hole
+   could flip the loop to "standalone ring" and delete the whole loop
+   in one slider step. */
+function denoiseLineMask(mask, w, h, minSize){
+  if(minSize<=0) return mask;
+  const eff=Math.max(1, Math.round(minSize*(w*h)/300000));
+  let L=labelComponents(mask,w,h,1);
+  for(let i=0;i<w*h;i++)
+    if(mask[i]===1 && L.sizes[L.labels[i]]<eff) mask[i]=0;
+  L=labelComponents(mask,w,h,0);
+  const bg=new Set();
+  for(let x=0;x<w;x++){ bg.add(L.labels[x]); bg.add(L.labels[(h-1)*w+x]); }
+  for(let y=0;y<h;y++){ bg.add(L.labels[y*w]); bg.add(L.labels[y*w+w-1]); }
+  for(let i=0;i<w*h;i++)
+    if(mask[i]===0 && !bg.has(L.labels[i]) && L.sizes[L.labels[i]]<eff) mask[i]=1;
+  return mask;
+}
 function despeckleMask(mask, w, h, minSize){
   if(minSize<=0) return mask;
   // normalize: minSize is calibrated at ~300k pixels (a typical phone
@@ -807,8 +828,13 @@ function currentGray(){
     }
     if(st.shadow>0) g=shadowLift(g,S.srcW,S.srcH,st.shadow);
     if(st.mode==="threshold"&&st.contrast>0) g=localContrast(g,S.srcW,S.srcH,st.contrast);
-    // fractional pre-blur tied to Detail (lower Detail = stronger blur)
-    const bf=((100-st.detail)/25)*(Math.min(S.srcW,S.srcH)/800);
+    // Pre-blur. In the LINE modes (Edge / Thin Line) the blur is FIXED:
+    // Detail there is purely the line finder's sensitivity, so raising
+    // it can only ever add lines, never move or remove them. In the
+    // filled modes the blur stays tied to Detail, as in the reference.
+    const lineMode=(st.mode==="edge"||st.mode==="thinline");
+    const bf=lineMode ? 0.7*(Math.min(S.srcW,S.srcH)/800)
+                      : ((100-st.detail)/25)*(Math.min(S.srcW,S.srcH)/800);
     if(bf>0.05){
       const r0=Math.floor(bf), fr=bf-r0;
       if(fr<0.05){ g=boxBlur(g,S.srcW,S.srcH,Math.max(1,r0)); }
@@ -827,6 +853,9 @@ function currentGray(){
 function denoiseAbs(){
   const st=S.settings;
   const base=st.denoise?42:8;
+  // line modes: fixed limit — Detail must never change what denoise
+  // removes there, or lines would vanish as Detail rises
+  if(st.mode==="edge"||st.mode==="thinline") return base;
   return Math.max(2,Math.round(base*(1.15-st.detail/200)));
 }
 function lwRadius(){
@@ -858,13 +887,19 @@ function buildMasks(){
     m = st.mode==="edge" ? xdogMask(gray,w,h,st.detail*1.6)
                          : xdogSoftMask(gray,w,h,st.detail*1.6);
     if(st.threshold>35){
-      const fill=thresholdMask(gray,w,h,cutLevel(gray,st.threshold));
-      // dark regions touching the border count as background, stay open
-      const FL=labelComponents(fill,w,h,1);
+      // Fill the darkest areas solid. Background is decided ONCE, at
+      // the base cut (Threshold 30): fill regions border-connected at
+      // that level never fill. Deciding per-slider-position instead
+      // would make a growing fill region vanish the moment it touched
+      // the border — the same add/remove cliff as the old denoise.
+      const baseFill=thresholdMask(gray,w,h,cutLevel(gray,30));
+      const BL=labelComponents(baseFill,w,h,1);
       const border=new Set();
-      for(let x=0;x<w;x++){ border.add(FL.labels[x]); border.add(FL.labels[(h-1)*w+x]); }
-      for(let y=0;y<h;y++){ border.add(FL.labels[y*w]); border.add(FL.labels[y*w+w-1]); }
-      for(let i=0;i<m.length;i++) if(fill[i]&&!border.has(FL.labels[i])) m[i]|=1;
+      for(let x=0;x<w;x++){ border.add(BL.labels[x]); border.add(BL.labels[(h-1)*w+x]); }
+      for(let y=0;y<h;y++){ border.add(BL.labels[y*w]); border.add(BL.labels[y*w+w-1]); }
+      const fill=thresholdMask(gray,w,h,cutLevel(gray,st.threshold));
+      for(let i=0;i<m.length;i++)
+        if(fill[i] && !(baseFill[i]&&border.has(BL.labels[i]))) m[i]|=1;
     }
   }else{ // adaptive
     const win=Math.max(9,Math.round(autoWin(w,h)*(1.7-st.detail/100)));
@@ -873,7 +908,8 @@ function buildMasks(){
     m=sauvolaMask(gray,w,h,k,win);
   }
   // tidy pass: denoise FIRST, then line weight, then close gaps, invert LAST
-  despeckleMask(m,w,h,denoiseAbs());
+  if(st.mode==="edge"||st.mode==="thinline") denoiseLineMask(m,w,h,denoiseAbs());
+  else despeckleMask(m,w,h,denoiseAbs());
   const lwR=lwRadius();
   if(lwR>0) m=dilateMask(m,w,h,lwR);
   if(st.closeGaps) m=closeMask(m,w,h,Math.max(1,Math.round(1.5*Math.min(w,h)/800)));
