@@ -177,6 +177,10 @@
   .modal { position:fixed; inset:0; z-index:50; display:none; overflow-y:auto; background:rgba(3,3,10,.7); backdrop-filter:blur(4px); padding:20px; }
   .modal.open { display:block; }
   .modal-card { width:100%; max-width:380px; margin:24px auto; }
+  /* Stencil viewer: a true full-screen takeover — opaque, edge to
+     edge, covers the header/logo and everything else. */
+  #galModal { z-index:900; background:#05050d; backdrop-filter:none; padding:0; }
+  #galModal .modal-card { max-width:none; width:100%; min-height:100%; margin:0; border-radius:0; background:#0d0d17; }
   .fld { display:block; font-size:.75rem; letter-spacing:.14em; text-transform:uppercase; color:var(--muted); margin-top:12px; }
   .fld input, .fld select {
     display:block; width:100%; margin-top:6px; padding:10px 12px;
@@ -430,7 +434,7 @@
   <div class="sys modal-card" style="max-width:95vw">
     <h2 id="galTitle">[ Stencil ]</h2>
     <div style="text-align:center">
-      <img id="galImg" style="max-width:100%;max-height:60vh;border-radius:10px;cursor:pointer;background:#fff">
+      <img id="galImg" style="max-width:100%;max-height:76vh;border-radius:10px;cursor:pointer;background:#fff">
       <p class="hint" id="galHint">Tap to view original</p>
     </div>
     <div class="btnrow">
