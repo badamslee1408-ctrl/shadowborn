@@ -468,6 +468,7 @@
           </div>
           <label class="fld-label" style="display:block">Detail<input type="range" id="slDet" min="0" max="100" value="78" style="width:100%;accent-color:#22d3ee"></label>
           <label class="fld-label" style="display:block">Threshold<input type="range" id="slThr" min="0" max="100" value="0" style="width:100%;accent-color:#22d3ee"></label>
+          <label class="fld-label" style="display:block">Fine Line<input type="range" id="slFine" min="0" max="100" value="0" style="width:100%;accent-color:#22d3ee"></label>
         </div>
         <div class="btnrow" style="margin-top:12px">
           <button class="ghost" id="slCancel">Cancel</button>
@@ -998,7 +999,18 @@ const S={ srcCanvas:null, origCanvas:null, srcW:0, srcH:0, gray:null, grayDirty:
   mask:null, tone:null, rot:0, settings:Object.assign({},DEFAULTS),
   styleName:"Custom", fmt:"png", compare:false, cmpSplit:0.52 };
 function status(msg){ if(window.__slStatus) window.__slStatus(msg); }
-function render(){ if(window.__slRender) window.__slRender(); }
+let thinV=0;
+/* Fine Line — the lab's own addition on top of the engine: erode the
+   finished mask (invert -> dilate -> invert, the engine's own
+   morphology). Runs once per rebuild, inside render(), before the
+   preview draws, so it can never accumulate. */
+function render(){
+  if(thinV>0 && S.mask){
+    const r=(thinV/100)*2.2*(Math.min(S.srcW,S.srcH)/800);
+    if(r>0.02){ invertMask(S.mask); S.mask=dilateFractional(S.mask,S.srcW,S.srcH,r); invertMask(S.mask); }
+  }
+  if(window.__slRender) window.__slRender();
+}
 /* ================= ENGINE (ours) ================= */
 function computeGray(px, w, h, brightness, contrast){
   const g = new Uint8Array(w*h);
@@ -1540,7 +1552,8 @@ function styledCanvas(white){
 return {
   load:function(canvas){ S.srcCanvas=canvas; S.origCanvas=canvas; S.srcW=canvas.width; S.srcH=canvas.height; S.rot=0; S.gray=null; S.grayDirty=true; S.mask=null; S.tone=null; process(); },
   set:function(k,v){ S.settings[k]=v; S.grayDirty=true; schedule(); },
-  reset:function(){ S.settings=Object.assign({},DEFAULTS); S.grayDirty=true; },
+  setThin:function(v){ thinV=v; if(S.srcCanvas) process(); },
+  reset:function(){ S.settings=Object.assign({},DEFAULTS); thinV=0; S.grayDirty=true; },
   styled:function(white){ return styledCanvas(white); },
   src:function(){ return S.srcCanvas; },
   has:function(){ return !!S.srcCanvas; }
@@ -1579,6 +1592,7 @@ function slSetup(canvas){
   SBEngine.reset(); slVer++;
   document.getElementById('slDet').value='78';
   document.getElementById('slThr').value='0';
+  document.getElementById('slFine').value='0';
   slFx='lineart'; slSyncFx();
   document.getElementById('slHome').style.display='none';
   document.getElementById('slAIView').style.display='none';
@@ -1612,6 +1626,7 @@ document.querySelectorAll('#slEd [data-fx]').forEach(function(b){
 });
 document.getElementById('slDet').addEventListener('input',function(e){ slSet('detail',+e.target.value); });
 document.getElementById('slThr').addEventListener('input',function(e){ slSet('threshold',+e.target.value); });
+document.getElementById('slFine').addEventListener('input',function(e){ slVer++; SBEngine.setThin(+e.target.value); });
 document.getElementById('slCmp').addEventListener('input',function(){ window.__slRender(); });
 (function(){
   const cv=document.getElementById('slCv'); if(!cv) return;
