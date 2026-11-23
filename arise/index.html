@@ -2191,5 +2191,37 @@ initSmoke(document.querySelector('.logo-wrap canvas.smoke'));
 /* ---- init ---- */
 renderCal(); renderApptList(); renderToday(); renderClients();
 </script>
+
+<!-- DIAGNOSTIC v22 (test copy only) -->
+<div id="dbg" style="position:fixed;left:0;right:0;bottom:0;z-index:2000;background:rgba(0,0,0,.92);color:#4ade80;font:11px/1.5 monospace;padding:6px 8px;pointer-events:none;white-space:pre-wrap;max-height:46vh;overflow:hidden">DBG v22 boot</div>
+<script>
+(function(){
+  var box=null, lines=[];
+  function log(m){ try{ if(!box) box=document.getElementById('dbg'); var t=new Date(); var s=('0'+t.getMinutes()).slice(-2)+':'+('0'+t.getSeconds()).slice(-2)+'.'+('00'+t.getMilliseconds()).slice(-3)+' '+m; lines.push(s); if(lines.length>14) lines.shift(); if(box) box.textContent=lines.join('\n'); }catch(e){} }
+  window.__dbg=log;
+  window.addEventListener('error',function(e){ log('ERROR: '+(e.message||e.type)); },true);
+  document.addEventListener('click',function(e){ var el=e.target; var top=document.elementFromPoint(e.clientX,e.clientY);
+    log('tap-> '+(el.tagName||'?')+'.'+(el.className||'')+'#'+(el.id||'')+' txt="'+(el.textContent||'').trim().slice(0,14)+'" | top='+(top?(top.tagName+'.'+(top.className||'')+'#'+(top.id||'')):'?')); },true);
+  log('readyState='+document.readyState+' loader='+(!!document.getElementById('loader')));
+  document.addEventListener('DOMContentLoaded',function(){ log('DOMContentLoaded'); });
+  window.addEventListener('load',function(){ log('window load, loader='+(!!document.getElementById('loader'))); });
+  // wrap the day opener once it exists
+  var tries=0; var iv=setInterval(function(){ tries++;
+    if(typeof window.openDayDetail==='function' && !window.openDayDetail.__wrapped){
+      var orig=window.openDayDetail;
+      window.openDayDetail=function(ds){ log('openDayDetail('+ds+') ENTER'); var r=orig.apply(this,arguments);
+        var m=document.getElementById('dayModal'); log('openDayDetail EXIT class=['+(m?m.className:'NO EL')+'] disp='+(m?getComputedStyle(m).display:'?'));
+        setTimeout(function(){ var m2=document.getElementById('dayModal'); log('dayModal @+600ms class=['+(m2?m2.className:'?')+'] disp='+(m2?getComputedStyle(m2).display:'?')); },600);
+        return r; };
+      window.openDayDetail.__wrapped=true; log('openDayDetail wrapped');
+    }
+    var b=document.getElementById('newApptBtn');
+    if(b && !b.__dbg){ b.__dbg=true; b.addEventListener('click',function(){ log('newApptBtn handler-side listener fired');
+      setTimeout(function(){ var m=document.getElementById('apptModal'); log('apptModal @+300ms class=['+(m?m.className:'?')+'] disp='+(m?getComputedStyle(m).display:'?')); },300); }); }
+    if(tries>40) clearInterval(iv);
+  },250);
+})();
+</script>
+
 </body>
 </html>
