@@ -1,5 +1,5 @@
 <!--
-  Stencil Lab (Shadowborn) v2.3 — Tattoo Shop Plugin
+  Stencil Lab (Shadowborn) v3.0 — Tattoo Shop Plugin
   Copyright (c) 2026 Brandon L. Adams <b.adams.lee1408@gmail.com>
   Proprietary. All rights reserved.
 -->
@@ -111,13 +111,13 @@
     cursor:pointer; min-height:32px;}
   /* control dock: lives with the preview, one slider at a time */
   #dock{margin-top:10px; padding-top:10px; border-top:1px solid #2c2c2c;}
-  #toolChips{display:flex; gap:6px; overflow-x:auto; margin:8px 0; padding-bottom:2px;
+  #presetRow{display:flex; gap:6px; overflow-x:auto; margin:8px 0; padding-bottom:2px;
     scrollbar-width:none;}
-  #toolChips::-webkit-scrollbar{display:none;}
-  #toolChips button{flex:0 0 auto; font-size:13px; font-weight:600; color:var(--muted);
+  #presetRow::-webkit-scrollbar{display:none;}
+  #presetRow button{flex:0 0 auto; font-size:13px; font-weight:600; color:var(--muted);
     background:#1a1a1a; border:1px solid #333; border-radius:16px; padding:7px 13px;
     cursor:pointer; min-height:36px;}
-  #toolChips button.on{color:#181200; border-color:var(--accent); background:var(--accent);}
+  #presetRow button.on{color:#181200; border-color:var(--accent); background:var(--accent);}
   #toolRow{display:flex; align-items:center; gap:8px;}
   #toolRow input[type=range]{flex:1; height:44px; margin:0;}
   #toolRow .v{color:var(--accent); font-variant-numeric:tabular-nums; font-weight:600;
@@ -225,22 +225,35 @@
     <div id="dock">
       <div class="seg" id="modeSeg">
         <button data-mode="threshold">Threshold</button>
-        <button data-mode="lineart" class="on">Line art</button>
+        <button data-mode="edge" class="on">Edge</button>
+        <button data-mode="thinline">Thin Line</button>
         <button data-mode="adaptive">Adaptive</button>
       </div>
-      <div id="toolChips">
-        <button data-tool="level" class="on">Level</button>
-        <button data-tool="soft">Soft</button>
-        <button data-tool="solid">Solid</button>
-        <button data-tool="bright">Bright</button>
-        <button data-tool="contrast">Contrast</button>
-        <button data-tool="blur">Smooth</button>
-        <button data-tool="despeck">Clean</button>
+      <div id="presetRow">
+        <button data-preset="bold">Bold Cut</button>
+        <button data-preset="clean" class="on">Clean Outline</button>
+        <button data-preset="fine">Fine Line</button>
+        <button data-preset="print">Print Ready</button>
       </div>
-      <div id="toolRow">
-        <button class="abtn" id="btnAutoLevel">Auto</button>
-        <input type="range" id="toolSlider" min="0" max="255" value="128" step="1">
-        <span class="v" id="toolVal">128</span>
+      <div class="ctl">
+        <div class="lab"><span>Threshold</span><span class="v" id="thresholdVal">54</span></div>
+        <input type="range" id="sldThreshold" min="0" max="100" value="54" step="1">
+      </div>
+      <div class="ctl">
+        <div class="lab"><span>Detail</span><span class="v" id="detailVal">68</span></div>
+        <input type="range" id="sldDetail" min="0" max="100" value="68" step="1">
+      </div>
+      <div class="ctl">
+        <div class="lab"><span>Line weight</span><span class="v" id="lineWeightVal">52</span></div>
+        <input type="range" id="sldLineWeight" min="0" max="100" value="52" step="1">
+      </div>
+      <div class="ctl">
+        <div class="lab"><span>Contrast</span><span class="v" id="contrastVal">78</span></div>
+        <input type="range" id="sldContrast" min="0" max="100" value="78" step="1">
+      </div>
+      <div class="ctl">
+        <div class="lab"><span>Shadow cleanup</span><span class="v" id="shadowVal">64</span></div>
+        <input type="range" id="sldShadow" min="0" max="100" value="64" step="1">
       </div>
     </div>
   </section>
@@ -249,6 +262,10 @@
   <section class="card" id="procCard">
     <h2>3 · Tune</h2>
 
+    <div class="tglrow">
+      <button class="tgl on" id="tglDenoise" aria-pressed="true">Denoise</button>
+      <button class="tgl on" id="tglCloseGaps" aria-pressed="true">Close Gaps</button>
+    </div>
     <div class="tglrow">
       <button class="tgl" id="tglInvert" aria-pressed="false">Invert</button>
       <button class="tgl" id="tglBridges" aria-pressed="false">Auto-bridges</button>
@@ -383,6 +400,64 @@ function otsuLevel(gray){
     if(between>best){ best=between; thresh=t; }
   }
   return thresh;
+}
+
+/* Tone terciles of the gray histogram: the dark/mid and mid/light
+   borders. The Threshold slider places its cut relative to these, so
+   one number adapts to each picture (stencilmaker.org model). */
+function toneCuts(gray){
+  const hist=new Uint32Array(256);
+  for(let i=0;i<gray.length;i++) hist[gray[i]]++;
+  const total=gray.length;
+  let cum=0, lo=85, hi=170, loSet=false;
+  for(let t=0;t<256;t++){
+    cum+=hist[t];
+    if(!loSet && cum>=total/3){ lo=t; loSet=true; }
+    if(cum>=2*total/3){ hi=t; break; }
+  }
+  return {lo:lo, hi:hi};
+}
+/* Threshold slider (0-100) -> gray cut level, anchored to terciles:
+   30 cuts at the dark/mid border; 100 reaches most of the way to the
+   mid/light border; below 30 the cut sinks under the dark/mid border. */
+function cutLevel(gray, t){
+  const c=toneCuts(gray);
+  if(t<=30) return Math.round(c.lo*(t/30));
+  return Math.round(c.lo + (t-30)/70*(c.hi-c.lo)*0.92);
+}
+/* Shadow cleanup: level an uneven backdrop to paper-white. The
+   backdrop is estimated by a heavy blur (our boxBlur); each pixel is
+   lifted toward white by how dark its backdrop is. amt 0-100 = how
+   much of the lift to apply. Left alone when the border reads dark
+   (backdrop is subject, not backdrop). */
+function shadowLift(gray,w,h,amt){
+  if(amt<=0) return gray;
+  let bsum=0, bn=0;
+  for(let x=0;x<w;x++){ bsum+=gray[x]+gray[(h-1)*w+x]; bn+=2; }
+  for(let y=0;y<h;y++){ bsum+=gray[y*w]+gray[y*w+w-1]; bn+=2; }
+  if(bsum/bn<90) return gray.slice();
+  const r=Math.max(8,(Math.min(w,h)>>3));
+  const bg=boxBlur(gray,w,h,r);
+  const out=new Uint8Array(w*h), f=amt/100;
+  for(let i=0;i<w*h;i++){
+    const lifted=Math.round(gray[i]*255/(bg[i]+8));
+    const v=Math.round(gray[i]+(Math.min(255,lifted)-gray[i])*f);
+    out[i]=v<0?0:(v>255?255:v);
+  }
+  return out;
+}
+/* Local contrast: sharpen each pixel away from its local average
+   (unsharp masking on the gray, built from boxBlur). amt 0-100. */
+function localContrast(gray,w,h,amt){
+  if(amt<=0) return gray;
+  const r=Math.max(2,(Math.min(w,h)/48)|0);
+  const blur=boxBlur(gray,w,h,r);
+  const out=new Uint8Array(w*h), f=amt/50;
+  for(let i=0;i<w*h;i++){
+    const v=Math.round(gray[i]+(gray[i]-blur[i])*f);
+    out[i]=v<0?0:(v>255?255:v);
+  }
+  return out;
 }
 
 /* Sauvola adaptive threshold: per-pixel threshold from local mean/std.
@@ -810,10 +885,12 @@ const S={
   mask:null,            // single-mode mask
   layerMasks:null,      // multi-layer masks
   settings:{
-    mode:"lineart", level:100, softAmt:83, solid:0,
-    brightness:0, contrast:1, blur:0,
-    invert:false, despeckle:22,
-    bridges:false, bridgeW:8,
+    /* stencilmaker.org control model: every control is a plain 0-100
+       absolute slider with one meaning. Defaults = their Clean Outline
+       preset (Edge mode). */
+    mode:"edge", threshold:54, detail:68, lineWeight:52, contrast:78, shadow:64,
+    denoise:true, closeGaps:true,
+    invert:false, bridges:false, bridgeW:8,
     layers:1, layer:0
   },
   view:"stencil"        // 'stencil' | 'original'
@@ -878,10 +955,28 @@ window.addEventListener("plugin-message",function(e){ handlePluginMessage(e.deta
 /* ---------- processing pipeline ---------- */
 function currentGray(){
   if(S.grayDirty||!S.gray){
+    const st=S.settings;
     const ctx=S.srcCanvas.getContext("2d");
     const px=ctx.getImageData(0,0,S.srcW,S.srcH).data;
-    let g=computeGray(px,S.srcW,S.srcH,S.settings.brightness,S.settings.contrast);
-    g=boxBlur(g,S.srcW,S.srcH,S.settings.blur);
+    let g=computeGray(px,S.srcW,S.srcH,0,1);
+    // pass order per the reference model: shadow cleanup first, then
+    // local contrast (Threshold mode), then the Detail pre-blur.
+    if(st.shadow>0) g=shadowLift(g,S.srcW,S.srcH,st.shadow);
+    if(st.mode==="threshold"&&st.contrast>0) g=localContrast(g,S.srcW,S.srcH,st.contrast);
+    // fractional pre-blur: blend the two nearest integer radii so the
+    // Detail slider moves smoothly instead of stepping at whole radii
+    const bf=((100-st.detail)/25)*(Math.min(S.srcW,S.srcH)/800);
+    if(bf>0.05){
+      const r0=Math.floor(bf), fr=bf-r0;
+      if(fr<0.05){ g=boxBlur(g,S.srcW,S.srcH,Math.max(1,r0)); }
+      else{
+        const a=r0===0?g:boxBlur(g,S.srcW,S.srcH,r0);
+        const b=boxBlur(g,S.srcW,S.srcH,r0+1);
+        const out=new Uint8Array(a.length);
+        for(let i=0;i<out.length;i++) out[i]=Math.round(a[i]+(b[i]-a[i])*fr);
+        g=out;
+      }
+    }
     S.gray=g; S.grayDirty=false;
   }
   return S.gray;
@@ -889,37 +984,76 @@ function currentGray(){
 
 function buildMasks(){
   const st=S.settings, w=S.srcW, h=S.srcH, gray=currentGray();
-  function finish(m){
-    if(st.invert) invertMask(m);
-    despeckleMask(m,w,h,st.despeckle);
-    if(st.bridges) addBridges(m,w,h,st.bridgeW);
-    return m;
-  }
-  if(st.layers<=1){
-    S.layerMasks=null;
-    let base = st.mode==="threshold" ? thresholdMask(gray,w,h,st.level)
-      : st.mode==="lineart" ? xdogMask(gray,w,h,st.level)
-      : sauvolaMask(gray,w,h,detailK(st.level),autoWin(w,h));
-    // soft-line discovery is an ADDITIVE refinement layer, not a replacement
-    if(st.mode==="lineart"&&st.softAmt>0){
-      const soft=xdogSoftMask(gray,w,h,st.softAmt);
-      for(let i=0;i<base.length;i++) base[i]|=soft[i];
-    }
-    // Bold: solidify lines (dilation) — thickens and connects, unlike blur
-    if(st.mode==="lineart"&&st.solid>0) base=closeMask(base,w,h,st.solid);
-    S.mask=finish(base);
-  }else{
+  if(st.layers>1){
     const bands=layerBands(gray,w,h,st.layers);
     S.layerCuts=bands.cuts||null;
     S.layerMasks=bands.map(function(b){
-      despeckleMask(b,w,h,st.despeckle);
+      despeckleMask(b,w,h,denoiseAbs());
       if(st.bridges) addBridges(b,w,h,st.bridgeW);
       return b;
     });
     S.mask=null;
     if(st.layer>=S.layerMasks.length) st.layer=0;
     buildLayerBar(); // refresh labels with the real quantile boundaries
+    return;
   }
+  S.layerMasks=null;
+  let m;
+  if(st.mode==="threshold"){
+    m=thresholdMask(gray,w,h,cutLevel(gray,st.threshold));
+    // strong edges are traced too, so a pale subject keeps its outline
+    const edges=xdogMask(gray,w,h,170);
+    for(let i=0;i<m.length;i++) m[i]|=edges[i];
+  }else if(st.mode==="edge"||st.mode==="thinline"){
+    // Detail is the line finder sensitivity; Threshold only fills the
+    // darkest areas solid, and only above 35 (<=35 = pure lines).
+    m = st.mode==="edge" ? xdogMask(gray,w,h,st.detail*1.6)
+                         : xdogSoftMask(gray,w,h,st.detail*1.6);
+    if(st.threshold>35){
+      const fill=thresholdMask(gray,w,h,cutLevel(gray,st.threshold));
+      // a dark region running along the border counts as background
+      // and stays open — only enclosed dark areas fill solid
+      const FL=labelComponents(fill,w,h,1);
+      const border=new Set();
+      for(let x=0;x<w;x++){ border.add(FL.labels[x]); border.add(FL.labels[(h-1)*w+x]); }
+      for(let y=0;y<h;y++){ border.add(FL.labels[y*w]); border.add(FL.labels[y*w+w-1]); }
+      for(let i=0;i<m.length;i++) if(fill[i]&&!border.has(FL.labels[i])) m[i]|=1;
+    }
+  }else{ // adaptive: Detail narrows the window, Threshold shifts the cut
+    const win=Math.max(9,Math.round(autoWin(w,h)*(1.7-st.detail/100)));
+    let k=detailK(st.detail)+(50-st.threshold)/250;
+    k=Math.max(0.05,Math.min(0.6,k));
+    m=sauvolaMask(gray,w,h,k,win);
+  }
+  // tidy pass, in the reference order: denoise FIRST (so specks are
+  // never thickened into blots), then line weight, then close gaps,
+  // invert LAST, bridges after (they key off final ink/paper).
+  despeckleMask(m,w,h,denoiseAbs());
+  const lwR=lwRadius();
+  if(lwR>0) m=dilateMask(m,w,h,lwR);
+  if(st.closeGaps) m=closeMask(m,w,h,Math.max(1,Math.round(1.5*Math.min(w,h)/800)));
+  if(st.invert) invertMask(m);
+  if(st.bridges) addBridges(m,w,h,st.bridgeW);
+  S.mask=m;
+}
+/* Denoise strength in despeckleMask units (calibrated at 300k px):
+   the reference removes specks up to ~90 px on an 800px picture when
+   on, ~18 px when off; higher Detail shrinks the limit a little. */
+function denoiseAbs(){
+  const st=S.settings;
+  const base=st.denoise?42:8;
+  return Math.max(2,Math.round(base*(1.15-st.detail/200)));
+}
+/* Line weight -> dilation radius. In filled modes (Threshold,
+   Adaptive) nothing changes up to 40, then shapes grow; in the line
+   modes it sets stroke width directly. Scales with picture size. */
+function lwRadius(){
+  const st=S.settings;
+  const scale=Math.min(S.srcW,S.srcH)/800;
+  if(st.mode==="edge"||st.mode==="thinline")
+    return Math.round((st.lineWeight/100)*2.5*scale);
+  if(st.lineWeight<=40) return 0;
+  return Math.round(((st.lineWeight-40)/60)*3*scale);
 }
 
 function activeMask(){
@@ -1061,141 +1195,80 @@ function bindSlider(id,valId,fmt,apply){
   }
   s.addEventListener("input",upd); upd();
 }
-function grayAffecting(fn){ return function(n){ fn(n); S.grayDirty=true; schedule(); }; }
-
-/* ---------- dock: one shared slider, tool chips ---------- */
-const TOOLS={
-  bright:{min:-120,max:120,step:1,
-    get:function(){return S.settings.brightness;},
-    set:function(v){S.settings.brightness=v;S.grayDirty=true;},fmt:String},
-  contrast:{min:20,max:300,step:1,
-    get:function(){return Math.round(S.settings.contrast*100);},
-    set:function(v){S.settings.contrast=v/100;S.grayDirty=true;},
-    fmt:function(v){return v+"%";}},
-  blur:{min:0,max:10,step:1,
-    get:function(){return S.settings.blur;},
-    set:function(v){S.settings.blur=v;S.grayDirty=true;},fmt:String},
-  despeck:{min:-100,max:100,step:1,
-    get:function(){return absToSlider(S.settings.despeckle,0,200,22);},
-    set:function(v){S.settings.despeckle=sliderToAbs(v,0,200,22);},
-    fmt:deltaFmt},
-  solid:{min:-100,max:100,step:1,
-    get:function(){return (S.settings.solid/4)*100;},
-    set:function(v){S.settings.solid=v<=0?0:Math.ceil((v/100)*4);},
-    fmt:deltaFmt}
-};
-let activeTool="level";
-/* Delta-slider helpers: slider s in [-100,100], 0 = standard (dead center).
-   Maps to absolute [absMin,absMax] piecewise so 0 always lands on std
-   with no dead zones or clamping. */
-function sliderToAbs(s,absMin,absMax,std){
-  if(s<=0) return std+(s/100)*(std-absMin);
-  return std+(s/100)*(absMax-std);
-}
-function absToSlider(a,absMin,absMax,std){
-  if(a<=std) return ((a-std)/(std-absMin))*100;
-  return ((a-std)/(absMax-std))*100;
-}
-function deltaFmt(v){ v=Math.round(v); return (v>0?"+":"")+v; }
-function levelCfg(){
-  const m=S.settings.mode;
-  if(m==="adaptive") return {min:0,max:100,step:1,label:"Detail",
-    get:function(){return S.settings.level;},set:function(v){S.settings.level=v;},
-    fmt:function(v){return v+"%";}};
-  if(m==="lineart")
-    // delta from the user's standard: 0 dead center = Lines 100
-    return {min:-100,max:100,step:1,label:"Lines",
-      get:function(){return absToSlider(S.settings.level,0,200,100);},
-      set:function(v){S.settings.level=sliderToAbs(v,0,200,100);},
-      fmt:deltaFmt};
-  return {min:0,max:255,step:1,label:"Level",
-    get:function(){return S.settings.level;},set:function(v){S.settings.level=v;},
-    fmt:String};
-}
-/* Soft chip: independent additive refinement layer.
-   Delta from standard: 0 dead center = Soft 83. */
-function softCfg(){
-  return {min:-100,max:100,step:1,label:"Soft",
-    get:function(){return absToSlider(S.settings.softAmt,0,200,83);},
-    set:function(v){S.settings.softAmt=sliderToAbs(v,0,200,83);},
-    fmt:deltaFmt};
-}
-function toolCfg(){
-  return activeTool==="level"?levelCfg():activeTool==="soft"?softCfg():TOOLS[activeTool];
-}
-/* Center-out track fill: at 0 (standard) no orange shows; fill grows
-   from the center as you push positive or negative. */
-function paintSlider(){
-  const s=$("toolSlider");
-  const min=parseFloat(s.min), max=parseFloat(s.max), v=parseFloat(s.value);
-  const vp=((v-min)/(max-min))*100;
-  const A="var(--accent)", T="var(--track,#3a3a3a)";
-  let g;
-  if(min<0&&max>0){
-    if(v>0) g="linear-gradient(to right,"+T+" 0%,"+T+" 50%,"+A+" 50%,"+A+" "+vp+"%,"+T+" "+vp+"%,"+T+" 100%)";
-    else if(v<0) g="linear-gradient(to right,"+T+" 0%,"+T+" "+vp+"%,"+A+" "+vp+"%,"+A+" 50%,"+T+" 50%,"+T+" 100%)";
-    else g=T; // v=0: plain track, no orange
-  }else{
-    g="linear-gradient(to right,"+A+" 0%,"+A+" "+vp+"%,"+T+" "+vp+"%,"+T+" 100%)";
-  }
-  s.style.background=g;
-  s.style.backgroundSize="100% 6px";
-  s.style.backgroundPosition="center";
-  s.style.backgroundRepeat="no-repeat";
-}
-function syncToolUI(){
-  const cfg=toolCfg();
-  const s=$("toolSlider");
-  s.min=cfg.min; s.max=cfg.max; s.step=cfg.step; s.value=cfg.get();
-  $("toolVal").textContent=cfg.fmt(cfg.get());
-  const chip=document.querySelector('#toolChips button[data-tool="level"]');
-  if(chip) chip.textContent=cfg.label;
-  // Soft/Solid only exist in line-art mode (they feed the line pipeline).
-  // Bright/Contrast/Smooth stay available in every mode: with the fixed
-  // line threshold they genuinely change line extraction on dark images.
-  const la=S.settings.mode==="lineart";
-  if(!la&&activeTool==="soft") activeTool="level";
-  if(!la&&activeTool==="solid") activeTool="level";
-  document.querySelectorAll("#toolChips button").forEach(function(b){
-    const t=b.dataset.tool;
-    if(!la&&(t==="soft"||t==="solid")){ b.style.display="none"; }
-    else { b.style.display=""; }
-    b.classList.toggle("on",t===activeTool);
+/* ---------- dock: permanent sliders, one meaning each ----------
+   The stencilmaker.org model: no shared slider, no delta mappings,
+   no hidden controls. Presets are just visible slider positions. */
+function bindCtl(id, valId, apply){
+  const s=$(id), v=$(valId);
+  s.addEventListener("input",function(){
+    const n=parseFloat(s.value);
+    v.textContent=n; apply(n); schedule();
   });
-  paintSlider();
 }
-$("toolSlider").addEventListener("input",function(){
-  const cfg=toolCfg();
-  const n=parseFloat($("toolSlider").value);
-  cfg.set(n);
-  // snap back if the value was clamped (e.g. Solid dragged negative)
-  const actual=cfg.get();
-  if(actual!==n) $("toolSlider").value=actual;
-  $("toolVal").textContent=cfg.fmt(actual);
-  paintSlider();
-  schedule();
-});
-$("toolChips").addEventListener("click",function(e){
-  const b=e.target.closest("button"); if(!b) return;
-  activeTool=b.dataset.tool; syncToolUI();
-});
-
-/* Auto: detail-maximizing baseline for the current mode */
-$("btnAutoLevel").addEventListener("click",function(){
-  if(!S.srcCanvas){ status("Load an image first."); return; }
+function grayCtl(id, valId, key){
+  bindCtl(id, valId, function(n){ S.settings[key]=n; S.grayDirty=true; });
+}
+grayCtl("sldThreshold","thresholdVal","threshold");
+grayCtl("sldDetail","detailVal","detail");
+bindCtl("sldLineWeight","lineWeightVal",function(n){ S.settings.lineWeight=n; });
+grayCtl("sldContrast","contrastVal","contrast");
+grayCtl("sldShadow","shadowVal","shadow");
+function syncCtlUI(){
   const st=S.settings;
-  st.brightness=0; st.contrast=1; st.blur=0; st.despeckle=22; st.grayDirty=true;
-  if(st.mode==="lineart"){
-    // user's preferred standard baseline (the new zero)
-    st.level=100; st.softAmt=83; st.solid=0;
-  }else{
-    if(st.mode==="adaptive") st.level=65;
-    else st.level=otsuLevel(currentGray());
-  }
-  activeTool="level"; syncToolUI(); schedule();
-  status(st.mode==="lineart"?"Auto line-art baseline":
-    st.mode==="adaptive"?"Auto detail baseline":"Auto threshold: "+st.level);
+  const pairs=[["sldThreshold","thresholdVal",st.threshold],
+    ["sldDetail","detailVal",st.detail],
+    ["sldLineWeight","lineWeightVal",st.lineWeight],
+    ["sldContrast","contrastVal",st.contrast],
+    ["sldShadow","shadowVal",st.shadow]];
+  pairs.forEach(function(p){ $(p[0]).value=p[2]; $(p[1]).textContent=p[2]; });
+  $("modeSeg").querySelectorAll("button").forEach(function(x){
+    x.classList.toggle("on",x.dataset.mode===st.mode);
+  });
+}
+/* Quick styles: the reference's published slider positions
+   (Threshold, Detail, Line weight, Contrast, Shadow cleanup). */
+const PRESETS={
+  bold:{mode:"threshold",threshold:66,detail:54,lineWeight:74,contrast:88,shadow:72},
+  clean:{mode:"edge",threshold:54,detail:68,lineWeight:52,contrast:78,shadow:64},
+  fine:{mode:"thinline",threshold:35,detail:78,lineWeight:36,contrast:72,shadow:58},
+  print:{mode:"threshold",threshold:62,detail:62,lineWeight:60,contrast:82,shadow:70}
+};
+function applyPreset(name){
+  const p=PRESETS[name]; if(!p) return;
+  const st=S.settings;
+  st.mode=p.mode; st.threshold=p.threshold; st.detail=p.detail;
+  st.lineWeight=p.lineWeight; st.contrast=p.contrast; st.shadow=p.shadow;
+  st.grayDirty=true;
+  $("presetRow").querySelectorAll("button").forEach(function(x){
+    x.classList.toggle("on",x.dataset.preset===name);
+  });
+  afterModeChange();
+}
+$("presetRow").addEventListener("click",function(e){
+  const b=e.target.closest("button"); if(!b) return;
+  applyPreset(b.dataset.preset);
 });
+function afterModeChange(){
+  const st=S.settings;
+  // layers only meaningful for threshold bands
+  const single=st.mode!=="threshold";
+  if(single && st.layers>1){
+    st.layers=1; st.layer=0;
+    $("sldLayers").value=1; $("layersVal").textContent="1"; buildLayerBar();
+    const t=$("tglInvert"); t.style.opacity="1"; t.style.pointerEvents="auto";
+  }
+  $("sldLayers").disabled=single;
+  setBridges(st.mode==="threshold"||st.mode==="adaptive"); // per-mode default
+  syncCtlUI(); schedule();
+}
+$("modeSeg").addEventListener("click",function(e){
+  const b=e.target.closest("button"); if(!b) return;
+  S.settings.mode=b.dataset.mode;
+  S.grayDirty=true;
+  $("presetRow").querySelectorAll("button").forEach(function(x){ x.classList.remove("on"); });
+  afterModeChange();
+});
+syncCtlUI();
 bindSlider("sldBridgeW","bridgeVal",function(n){return n+" px";},function(n){
   S.settings.bridgeW=n; schedule();
 });
@@ -1209,27 +1282,6 @@ bindSlider("sldLayers","layersVal",String,function(n){
   schedule();
 });
 
-$("modeSeg").addEventListener("click",function(e){
-  const b=e.target.closest("button"); if(!b) return;
-  S.settings.mode=b.dataset.mode;
-  $("modeSeg").querySelectorAll("button").forEach(function(x){
-    x.classList.toggle("on",x===b);
-  });
-  S.settings.level = S.settings.mode==="adaptive" ? 65
-    : S.settings.mode==="lineart" ? 100 : 128;
-  // layers only meaningful for threshold bands
-  const single=S.settings.mode!=="threshold";
-  if(single && S.settings.layers>1){
-    S.settings.layers=1; S.settings.layer=0;
-    $("sldLayers").value=1; $("layersVal").textContent="1"; buildLayerBar();
-    const t=$("tglInvert"); t.style.opacity="1"; t.style.pointerEvents="auto";
-  }
-  $("sldLayers").disabled=single;
-  setBridges(S.settings.mode!=="lineart"); // per-mode Auto-bridges default
-  activeTool="level"; syncToolUI(); schedule();
-});
-syncToolUI();
-
 function bindToggle(id,get,set){
   const el=$(id);
   el.addEventListener("click",function(){
@@ -1239,15 +1291,21 @@ function bindToggle(id,get,set){
     schedule();
   });
 }
+bindToggle("tglDenoise",
+  function(){return S.settings.denoise;},
+  function(v){S.settings.denoise=v;});
+bindToggle("tglCloseGaps",
+  function(){return S.settings.closeGaps;},
+  function(v){S.settings.closeGaps=v;});
 bindToggle("tglInvert",
   function(){return S.settings.invert;},
   function(v){S.settings.invert=v;});
 bindToggle("tglBridges",
   function(){return S.settings.bridges;},
   function(v){S.settings.bridges=v; $("bridgeCtl").classList.toggle("hidden",!v);});
-/* Auto-bridges default: OFF in Line art (they carve channels through
-   finished lines whenever detail shifts), ON in Threshold/Adaptive.
-   The toggle always overrides manually within the current mode. */
+/* Auto-bridges default: OFF in the line modes (Edge, Thin Line) where
+   they carve channels through finished lines, ON in Threshold and
+   Adaptive. The toggle always overrides manually within the mode. */
 function setBridges(v){
   S.settings.bridges=v;
   const el=$("tglBridges");
@@ -1255,7 +1313,7 @@ function setBridges(v){
   el.setAttribute("aria-pressed",String(v));
   $("bridgeCtl").classList.toggle("hidden",!v);
 }
-setBridges(S.settings.mode!=="lineart");
+setBridges(S.settings.mode==="threshold"||S.settings.mode==="adaptive");
 
 /* layer chips */
 function buildLayerBar(){
