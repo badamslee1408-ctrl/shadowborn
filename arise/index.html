@@ -781,6 +781,7 @@ function goTab(id){
   const chrome=(id==='stencillab')?'none':'';
   document.querySelector('header').style.display=chrome;
   document.querySelector('footer').style.display=chrome;
+  if(id==='gallery'&&typeof renderFolderCounts==='function') renderFolderCounts();
 }
 document.querySelectorAll('[data-go]').forEach(b=>{
   b.addEventListener('click',()=>goTab(b.dataset.go));
@@ -1691,6 +1692,7 @@ document.getElementById('slFin').addEventListener('click',function(){
     document.getElementById('slHome').style.display='block';
     const note=document.getElementById('slSaveNote');
     if(note) note.textContent='Last save: filed to Unclaimed Stencils ✓';
+    if(typeof renderFolderCounts==='function') renderFolderCounts();
     alert('Saved to Unclaimed Stencils.');
   }catch(e){
     const msg='Save error: '+((e&&e.message)?e.message:e);
@@ -2076,15 +2078,18 @@ document.getElementById('clAdd').addEventListener('click',()=>{
 
 /* ---- gallery folders ---- */
 const folderNames = { unclaimed:'Unclaimed Stencils', used:'Used Stencils', finished:'Finished Work' };
+function renderFolderCounts(){
+  document.querySelectorAll('.folder .sub').forEach(el=>{
+    const f=el.closest('.folder').dataset.folder;
+    el.textContent=stencils.filter(s=>s.folder===f).length+' items';
+  });
+}
 function renderFolder(folder){
   const grid=document.getElementById('folderGrid');
   if(!grid) return;
   grid.innerHTML='';
   const list=stencils.filter(s=>s.folder===folder);
-  document.querySelectorAll('.folder .s').forEach(el=>{
-    const f=el.closest('.folder').dataset.folder;
-    el.textContent=stencils.filter(s=>s.folder===f).length+' items';
-  });
+  renderFolderCounts();
   if(!list.length){ grid.innerHTML='<p class="statusline">Empty.</p>'; return; }
   list.forEach(s=>{
     const d=document.createElement('div');
@@ -2101,6 +2106,7 @@ document.querySelectorAll('.folder').forEach(f=>{
     renderFolder(f.dataset.folder);
   });
 });
+renderFolderCounts();
 /* stencil viewer with tap-toggle original */
 let galId=null, galOrig=false;
 function openStencil(id){
