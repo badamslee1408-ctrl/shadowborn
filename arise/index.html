@@ -452,7 +452,12 @@
       </div>
       <div id="slEd" style="display:none">
         <div style="position:sticky;top:0;z-index:6;background:var(--panel);padding:2px 0 10px">
-        <canvas id="slCv" style="width:100%;height:auto;max-height:60vh;object-fit:contain;border-radius:10px;background:#fff"></canvas>
+        <canvas id="slCv" style="width:100%;height:auto;max-height:60vh;object-fit:contain;border-radius:10px;background:#fff;touch-action:pan-y"></canvas>
+        <div style="display:flex;align-items:center;gap:8px;margin-top:6px">
+          <span class="hint" style="flex:none">Stencil</span>
+          <input type="range" id="slCmp" min="0" max="100" value="50" style="flex:1;accent-color:#22d3ee">
+          <span class="hint" style="flex:none">Original</span>
+        </div>
         </div>
         <div style="margin-top:10px">
           <div class="fld-label">Effect</div>
@@ -1537,13 +1542,27 @@ return {
 };
 })();
 let slFx='lineart';
+let slVer=0, slStyledCache=null, slCacheVer=-1;
+function slSet(k,v){ slVer++; SBEngine.set(k,v); }
 window.__slRender=function(){
   const cv=document.getElementById('slCv'); if(!cv) return;
   const src=SBEngine.src(); if(!src) return;
   cv.width=src.width; cv.height=src.height;
   const ctx=cv.getContext('2d');
   if(slFx==='orig'){ ctx.drawImage(src,0,0); return; }
-  const sc=SBEngine.styled(true); if(sc) ctx.drawImage(sc,0,0);
+  if(slCacheVer!==slVer){ slStyledCache=SBEngine.styled(true); slCacheVer=slVer; }
+  const sc=slStyledCache; if(!sc) return;
+  ctx.drawImage(sc,0,0);
+  const cmp=document.getElementById('slCmp');
+  const f=cmp?(+cmp.value)/100:0.5;
+  if(f>0){
+    const x=Math.max(0,Math.min(src.width,Math.round(src.width*f)));
+    if(x>0){
+      ctx.save(); ctx.beginPath(); ctx.rect(0,0,x,src.height); ctx.clip();
+      ctx.drawImage(src,0,0); ctx.restore();
+      ctx.fillStyle='rgba(34,211,238,.9)'; ctx.fillRect(x-1,0,2,src.height);
+    }
+  }
 };
 window.__slStatus=function(m){ const el=document.getElementById('slHint'); if(el) el.textContent=m; };
 function slSyncFx(){
@@ -1552,7 +1571,7 @@ function slSyncFx(){
   });
 }
 function slSetup(canvas){
-  SBEngine.reset();
+  SBEngine.reset(); slVer++;
   document.getElementById('slDet').value='78';
   document.getElementById('slThr').value='0';
   slFx='lineart'; slSyncFx();
@@ -1581,13 +1600,28 @@ document.getElementById('slSample').addEventListener('click',function(){
 document.querySelectorAll('#slEd [data-fx]').forEach(function(b){
   b.addEventListener('click',function(){
     slFx=b.getAttribute('data-fx'); slSyncFx();
-    if(slFx==='lineart') SBEngine.set('mode','thinline');
-    else if(slFx==='thresh') SBEngine.set('mode','threshold');
+    if(slFx==='lineart') slSet('mode','thinline');
+    else if(slFx==='thresh') slSet('mode','threshold');
     else window.__slRender();
   });
 });
-document.getElementById('slDet').addEventListener('input',function(e){ SBEngine.set('detail',+e.target.value); });
-document.getElementById('slThr').addEventListener('input',function(e){ SBEngine.set('threshold',+e.target.value); });
+document.getElementById('slDet').addEventListener('input',function(e){ slSet('detail',+e.target.value); });
+document.getElementById('slThr').addEventListener('input',function(e){ slSet('threshold',+e.target.value); });
+document.getElementById('slCmp').addEventListener('input',function(){ window.__slRender(); });
+(function(){
+  const cv=document.getElementById('slCv'); if(!cv) return;
+  let drag=false;
+  function upd(e){
+    const r=cv.getBoundingClientRect(); if(!r.width) return;
+    const f=Math.max(0,Math.min(1,(e.clientX-r.left)/r.width));
+    const s=document.getElementById('slCmp'); if(s) s.value=Math.round(f*100);
+    window.__slRender();
+  }
+  cv.addEventListener('pointerdown',function(e){ drag=true; try{ cv.setPointerCapture(e.pointerId); }catch(_){} upd(e); });
+  cv.addEventListener('pointermove',function(e){ if(drag) upd(e); });
+  cv.addEventListener('pointerup',function(){ drag=false; });
+  cv.addEventListener('pointercancel',function(){ drag=false; });
+})();
 document.getElementById('slCancel').addEventListener('click',function(){
   document.getElementById('slEd').style.display='none';
   document.getElementById('slHome').style.display='block';
