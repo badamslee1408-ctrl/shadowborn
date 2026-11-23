@@ -452,7 +452,7 @@
       </div>
       <div id="slEd" style="display:none">
         <div style="position:sticky;top:0;z-index:6;background:var(--panel);padding:2px 0 10px">
-        <canvas id="slCv" style="width:100%;height:46vh;object-fit:contain;border-radius:10px;background:#fff;touch-action:pan-y"></canvas>
+        <canvas id="slCv" style="width:100%;height:56vh;object-fit:contain;border-radius:10px;background:#fff;touch-action:pan-y"></canvas>
         <div style="display:flex;align-items:center;gap:8px;margin-top:6px">
           <span class="hint" style="flex:none">Stencil</span>
           <input type="range" id="slCmp" min="0" max="100" value="50" style="flex:1;accent-color:#22d3ee">
@@ -774,6 +774,11 @@ function goTab(id){
   document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));
   document.getElementById(id).classList.add('active');
   document.querySelector('main').scrollTop=0;
+  /* In the Stencil Lab the app chrome steps aside: no logo header,
+     no footer — the whole screen belongs to the work. */
+  const chrome=(id==='stencillab')?'none':'';
+  document.querySelector('header').style.display=chrome;
+  document.querySelector('footer').style.display=chrome;
 }
 document.querySelectorAll('[data-go]').forEach(b=>{
   b.addEventListener('click',()=>goTab(b.dataset.go));
