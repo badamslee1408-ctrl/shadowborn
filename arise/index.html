@@ -449,6 +449,7 @@
         <button id="slAI" class="ghost" style="width:100%">AI Generate (Umbra)</button>
         <button id="slSample" class="ghost" style="width:100%;margin-top:10px">Use Sample Image (test)</button>
         <p class="hint" style="margin-top:10px">Powered by the Shadowborn engine — Badams IP.</p>
+        <p class="hint" id="slSaveNote" style="margin-top:6px"></p>
       </div>
       <div id="slEd" style="display:none">
         <div style="position:sticky;top:0;z-index:6;background:var(--panel);padding:2px 0 10px">
@@ -1663,27 +1664,39 @@ function slPersisted(id){
   catch(e){ return false; }
 }
 document.getElementById('slFin').addEventListener('click',function(){
-  if(!SBEngine.has()) return;
-  const item={id:'st'+Date.now(), folder:'unclaimed', date:new Date().toISOString().slice(0,10),
-    stencil:slFitCanvas(SBEngine.styled(false),1200).toDataURL('image/png'),
-    original:slFitCanvas(SBEngine.src(),1200).toDataURL('image/jpeg',0.85)};
-  stencils.push(item);
-  let ok=false;
-  try{ slSave(); ok=slPersisted(item.id); }catch(e){ ok=false; }
-  if(!ok){
-    /* storage is tight — retry once at a smaller size before failing */
-    item.stencil=slFitCanvas(SBEngine.styled(false),800).toDataURL('image/png');
-    item.original=slFitCanvas(SBEngine.src(),800).toDataURL('image/jpeg',0.8);
-    try{ slSave(); ok=slPersisted(item.id); }catch(e){ ok=false; }
+  const hint=document.getElementById('slHint');
+  try{
+    if(!SBEngine.has()){ if(hint) hint.textContent='Load an image first.'; return; }
+    const item={id:'st'+Date.now(), folder:'unclaimed', date:new Date().toISOString().slice(0,10),
+      stencil:slFitCanvas(SBEngine.styled(false),1200).toDataURL('image/png'),
+      original:slFitCanvas(SBEngine.src(),1200).toDataURL('image/jpeg',0.85)};
+    stencils.push(item);
+    let ok=false, err='';
+    try{ slSave(); ok=slPersisted(item.id); }catch(e){ err=(e&&e.message)?e.message:String(e); }
+    if(!ok){
+      /* storage is tight — retry once at a smaller size before failing */
+      item.stencil=slFitCanvas(SBEngine.styled(false),800).toDataURL('image/png');
+      item.original=slFitCanvas(SBEngine.src(),800).toDataURL('image/jpeg',0.8);
+      try{ slSave(); ok=slPersisted(item.id); }catch(e){ err=(e&&e.message)?e.message:String(e); }
+    }
+    if(!ok){
+      stencils.splice(stencils.indexOf(item),1);
+      let used=0; try{ used=(localStorage.getItem('arise_stencils')||'').length; }catch(e){}
+      const msg='Save failed'+(err?(' — '+err):'')+'. Stored stencils currently use about '+Math.round(used/1024)+' KB.';
+      if(hint) hint.textContent=msg;
+      alert(msg);
+      return;
+    }
+    document.getElementById('slEd').style.display='none';
+    document.getElementById('slHome').style.display='block';
+    const note=document.getElementById('slSaveNote');
+    if(note) note.textContent='Last save: filed to Unclaimed Stencils ✓';
+    alert('Saved to Unclaimed Stencils.');
+  }catch(e){
+    const msg='Save error: '+((e&&e.message)?e.message:e);
+    if(hint) hint.textContent=msg;
+    alert(msg);
   }
-  if(!ok){
-    stencils.splice(stencils.indexOf(item),1);
-    alert('Could not save — the app storage is full. Remove some Gallery items and try again.');
-    return;
-  }
-  document.getElementById('slEd').style.display='none';
-  document.getElementById('slHome').style.display='block';
-  alert('Saved to Unclaimed Stencils.');
 });
 document.getElementById('slAI').addEventListener('click',()=>{
   document.getElementById('slHome').style.display='none';
