@@ -1,5 +1,5 @@
 <!--
-  Stencil Lab (Shadowborn) v2.2 — Tattoo Shop Plugin
+  Stencil Lab (Shadowborn) v2.3 — Tattoo Shop Plugin
   Copyright (c) 2026 Brandon L. Adams <b.adams.lee1408@gmail.com>
   Proprietary. All rights reserved.
 -->
@@ -251,10 +251,10 @@
 
     <div class="tglrow">
       <button class="tgl" id="tglInvert" aria-pressed="false">Invert</button>
-      <button class="tgl on" id="tglBridges" aria-pressed="true">Auto-bridges</button>
+      <button class="tgl" id="tglBridges" aria-pressed="false">Auto-bridges</button>
     </div>
 
-    <div class="ctl" id="bridgeCtl">
+    <div class="ctl hidden" id="bridgeCtl">
       <div class="lab"><span>Bridge width</span><span class="v" id="bridgeVal">8 px</span></div>
       <input type="range" id="sldBridgeW" min="2" max="24" value="8" step="1">
     </div>
@@ -813,7 +813,7 @@ const S={
     mode:"lineart", level:100, softAmt:83, solid:0,
     brightness:0, contrast:1, blur:0,
     invert:false, despeckle:22,
-    bridges:true, bridgeW:8,
+    bridges:false, bridgeW:8,
     layers:1, layer:0
   },
   view:"stencil"        // 'stencil' | 'original'
@@ -1225,6 +1225,7 @@ $("modeSeg").addEventListener("click",function(e){
     const t=$("tglInvert"); t.style.opacity="1"; t.style.pointerEvents="auto";
   }
   $("sldLayers").disabled=single;
+  setBridges(S.settings.mode!=="lineart"); // per-mode Auto-bridges default
   activeTool="level"; syncToolUI(); schedule();
 });
 syncToolUI();
@@ -1244,6 +1245,17 @@ bindToggle("tglInvert",
 bindToggle("tglBridges",
   function(){return S.settings.bridges;},
   function(v){S.settings.bridges=v; $("bridgeCtl").classList.toggle("hidden",!v);});
+/* Auto-bridges default: OFF in Line art (they carve channels through
+   finished lines whenever detail shifts), ON in Threshold/Adaptive.
+   The toggle always overrides manually within the current mode. */
+function setBridges(v){
+  S.settings.bridges=v;
+  const el=$("tglBridges");
+  el.classList.toggle("on",v);
+  el.setAttribute("aria-pressed",String(v));
+  $("bridgeCtl").classList.toggle("hidden",!v);
+}
+setBridges(S.settings.mode!=="lineart");
 
 /* layer chips */
 function buildLayerBar(){
