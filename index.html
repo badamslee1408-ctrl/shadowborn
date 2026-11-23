@@ -701,6 +701,7 @@ function layerBands(gray, w, h, count){
     let b=0; while(b<cuts.length && gray[i]>cuts[b]) b++;
     bands[b][i]=1;
   }
+  bands.cuts=cuts; // actual gray boundaries, for honest layer labels
   return bands;
 }
 
@@ -905,6 +906,7 @@ function buildMasks(){
     S.mask=finish(base);
   }else{
     const bands=layerBands(gray,w,h,st.layers);
+    S.layerCuts=bands.cuts||null;
     S.layerMasks=bands.map(function(b){
       despeckleMask(b,w,h,st.despeckle);
       if(st.bridges) addBridges(b,w,h,st.bridgeW);
@@ -912,6 +914,7 @@ function buildMasks(){
     });
     S.mask=null;
     if(st.layer>=S.layerMasks.length) st.layer=0;
+    buildLayerBar(); // refresh labels with the real quantile boundaries
   }
 }
 
@@ -1210,8 +1213,6 @@ $("modeSeg").addEventListener("click",function(e){
   });
   S.settings.level = S.settings.mode==="adaptive" ? 65
     : S.settings.mode==="lineart" ? 100 : 128;
-  // blur is hidden in line-art (Bold replaces it); reset so no hidden state lingers
-  if(S.settings.mode==="lineart") S.settings.blur=0;
   // layers only meaningful for threshold bands
   const single=S.settings.mode!=="threshold";
   if(single && S.settings.layers>1){
@@ -1249,7 +1250,9 @@ function buildLayerBar(){
   for(let i=0;i<n;i++){
     (function(i){
       const b=document.createElement("button");
-      const lo=Math.round(i*255/n), hi=Math.round((i+1)*255/n)-1;
+      // label with the REAL band boundaries (population split), not equal intervals
+      const cuts=S.layerCuts||[];
+      const lo=i===0?0:(cuts[i-1]+1), hi=i>=n-1?255:(cuts[i]!==undefined?cuts[i]:Math.round((i+1)*255/n)-1);
       b.innerHTML="L"+(i+1)+"<small>"+lo+"–"+hi+"</small>";
       if(i===S.settings.layer) b.classList.add("on");
       b.addEventListener("click",function(){
