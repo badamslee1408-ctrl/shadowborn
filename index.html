@@ -1,324 +1,472 @@
-<!--
-  Stencil Lab (Shadowborn) v4.0 — Tattoo Shop Plugin
-  Copyright (c) 2026 Brandon L. Adams <b.adams.lee1408@gmail.com>
-  Proprietary. All rights reserved.
--->
 <!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Shadowborn</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Shadowborn — Create a Stencil Online</title>
 <!--
-  SHADOWBORN — single-file, fully offline stencil generator.
-  ----------------------------------------------------------------
-  * Zero external dependencies: no CDNs, no frameworks, no fonts, no network calls.
-  * Works from file:// and inside an Android WebView with no internet.
-  * All image processing runs locally on <canvas> pixel buffers.
-  * Privacy: images never leave the device. There is intentionally no
-    analytics, no upload, no fetch/XHR anywhere in this file.
-
-  Notes for the future APK wrapper:
-  * Enable file downloads in the host app (Android WebView needs a
-    DownloadListener — the <a download> links below won't save files
-    without one).
-  * window.print() needs host print support to produce PDF on Android.
+  Shadowborn Stencil Maker v5.0
+  Editor layout and control model follow stencilmaker.org's editor:
+  header + left tool rail + compare canvas + right control panel.
+  Engine (XDoG / Sauvola / tone bands) is our own code, on-device only.
+  No uploads, no accounts, no analytics.
 -->
 <style>
   :root{
-    --bg:#141414; --card:#1f1f1f; --card2:#262626;
-    --txt:#f0f0f0; --muted:#9a9a9a;
-    --accent:#ff9f1c; --accent-dk:#b96f0a;
-    --danger:#ff5a5a;
-    --radius:12px;
+    --violet:#7c3aed; --violet-dk:#6d28d9; --ink:#1f2430; --muted:#6b7280;
+    --line:#e5e7eb; --panel:#ffffff; --work:#eef0f3; --radius:14px;
   }
   *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
-  html,body{margin:0;padding:0;}
-  body{
-    background:var(--bg); color:var(--txt);
-    font-family:system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;
-    font-size:16px; line-height:1.4;
-    padding-bottom:env(safe-area-inset-bottom);
-  }
-  .topbar{
-    position:sticky; top:0; z-index:20;
-    display:flex; align-items:center; justify-content:space-between;
-    padding:10px 14px; background:#0d0d0d; border-bottom:1px solid #2c2c2c;
-  }
-  .topbar h1{font-size:19px; margin:0; letter-spacing:.5px;}
-  .topbar h1 .dot{color:var(--accent);}
-  .card{
-    background:var(--card); border:1px solid #2c2c2c; border-radius:var(--radius);
-    margin:10px; padding:14px;
-  }
-  .card h2{font-size:15px; margin:0 0 10px; color:var(--muted);
-    text-transform:uppercase; letter-spacing:1px; font-weight:600;}
-  .muted{color:var(--muted); font-size:13px;}
-  .btnrow{display:flex; gap:10px; flex-wrap:wrap;}
-  .btn{
-    display:inline-flex; align-items:center; justify-content:center; gap:8px;
-    min-height:52px; padding:12px 18px; border-radius:10px; border:1px solid #3a3a3a;
-    background:var(--card2); color:var(--txt); font-size:16px; font-weight:600;
-    cursor:pointer; user-select:none; text-align:center; flex:1 1 auto;
-  }
-  .btn:active{transform:scale(.97);}
-  .btn.primary{background:var(--accent); border-color:var(--accent-dk); color:#181200;}
-  .btn.ghost{background:transparent;}
-  #dropZone{
-    border:2px dashed #4a4a4a; border-radius:var(--radius);
-    padding:22px 14px; text-align:center; transition:border-color .15s, background .15s;
-  }
-  #dropZone.over{border-color:var(--accent); background:#2a2113;}
-  #dropZone p{margin:8px 0;}
-  /* segmented control */
-  .seg{display:flex; gap:6px; background:#141414; border-radius:10px; padding:4px;}
-  .seg button{
-    flex:1; border:0; border-radius:7px; background:transparent; color:var(--muted);
-    font-size:15px; font-weight:600; min-height:44px; cursor:pointer; padding:8px 4px;
-  }
-  .seg button.on{background:var(--accent); color:#181200;}
-  .segrow{display:flex; gap:8px; align-items:center; justify-content:space-between; margin-bottom:10px;}
-  .zoomrow{display:flex; gap:6px;}
-  .zoomrow button{
-    width:48px; height:44px; border-radius:8px; border:1px solid #3a3a3a;
-    background:var(--card2); color:var(--txt); font-size:20px; font-weight:700; cursor:pointer;
-  }
-  .zoomrow button:active{transform:scale(.95);}
-  #viewport{
-    position:relative; overflow:hidden; background:#000; border-radius:8px;
-    height:58vh; min-height:280px; touch-action:none; border:1px solid #333;
-  }
-  #view{transform-origin:0 0; display:block;}
-  /* sticky live preview: pins under the header while you work the sliders */
-  #previewCard{position:sticky; z-index:15;}
-  #previewCard.stuck{padding:8px 10px;}
-  #previewCard.stuck h2{display:none;}
-  #previewCard.stuck #viewport{height:30vh; min-height:0;}
-  /* image loader compacts once a picture is in — buttons stay tappable */
-  #inputCard.done #dropZone>p:first-child{display:none;}
-  #inputCard.done{padding:8px 14px;}
-  #inputCard.done h2{margin:0 0 8px; font-size:13px;}
-  #viewport .hint{
-    position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
-    color:#777; font-size:15px; pointer-events:none; text-align:center; padding:20px;
-  }
-  /* sliders */
-  .ctl{margin:6px 0 2px;}
-  .ctl .lab{display:flex; justify-content:space-between; align-items:baseline; font-size:14px;}
-  .ctl .lab .v{color:var(--accent); font-variant-numeric:tabular-nums; font-weight:600;}
-  .abtn{font-size:12px; font-weight:700; color:var(--accent); background:transparent;
-    border:1px solid var(--accent); border-radius:20px; padding:3px 12px; margin-left:8px;
-    cursor:pointer; min-height:32px;}
-  /* control dock: lives with the preview, one slider at a time */
-  #dock{margin-top:10px; padding-top:10px; border-top:1px solid #2c2c2c;}
-  #presetRow{display:flex; gap:6px; overflow-x:auto; margin:8px 0; padding-bottom:2px;
-    scrollbar-width:none;}
-  #presetRow::-webkit-scrollbar{display:none;}
-  #presetRow button{flex:0 0 auto; font-size:13px; font-weight:600; color:var(--muted);
-    background:#1a1a1a; border:1px solid #333; border-radius:16px; padding:7px 13px;
-    cursor:pointer; min-height:36px;}
-  #presetRow button.on{color:#181200; border-color:var(--accent); background:var(--accent);}
-  #toolRow{display:flex; align-items:center; gap:8px;}
-  #toolRow input[type=range]{flex:1; height:44px; margin:0;}
-  #toolRow .v{color:var(--accent); font-variant-numeric:tabular-nums; font-weight:600;
-    min-width:46px; text-align:right; font-size:14px;}
-  #toolRow .abtn{margin-left:0; flex:0 0 auto;}
-  input[type=range]{
-    width:100%; height:48px; margin:0; accent-color:var(--accent); cursor:pointer;
-    background:transparent;
-  }
-  /* Center-out fill for delta sliders: track painted via JS gradient */
-  #toolSlider{
-    -webkit-appearance:none; appearance:none;
-    --track:#3a3a3a;
-  }
-  #toolSlider::-webkit-slider-runnable-track{ background:transparent; }
-  #toolSlider::-webkit-slider-thumb{
-    -webkit-appearance:none; appearance:none;
-    width:24px; height:24px; border-radius:50%;
-    background:var(--accent); border:none; margin-top:10px; cursor:pointer;
-  }
-  #toolSlider::-moz-range-track{ background:transparent; }
-  #toolSlider::-moz-range-thumb{
-    width:24px; height:24px; border:none; border-radius:50%;
-    background:var(--accent); cursor:pointer;
-  }
-  /* toggle buttons */
-  .tgl{
-    min-height:48px; padding:10px 16px; border-radius:10px; font-size:15px; font-weight:600;
-    border:1px solid #3a3a3a; background:var(--card2); color:var(--muted); cursor:pointer;
-  }
-  .tgl.on{background:#2c4a22; border-color:#5a8f3c; color:#dff0d2;}
-  .tgl:active{transform:scale(.97);}
-  .tglrow{display:flex; gap:10px; margin:10px 0 4px;}
-  .tglrow .tgl{flex:1;}
-  #layerBar{display:flex; gap:8px; flex-wrap:wrap; margin-top:10px;}
-  #layerBar button{
-    flex:1 1 60px; min-height:48px; border-radius:8px; border:1px solid #3a3a3a;
-    background:var(--card2); color:var(--muted); font-weight:700; font-size:14px; cursor:pointer;
-  }
-  #layerBar button.on{background:var(--accent); color:#181200; border-color:var(--accent-dk);}
-  #layerBar button small{display:block; font-weight:400; font-size:11px;}
+  html,body{height:100%;}
+  body{margin:0; font-family:-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    color:var(--ink); background:var(--work); display:flex; flex-direction:column; overflow:hidden;}
+  button{font-family:inherit; cursor:pointer;}
+  /* ---------- header ---------- */
+  header{height:58px; flex:0 0 58px; background:#fff; border-bottom:1px solid var(--line);
+    display:flex; align-items:center; gap:12px; padding:0 14px; z-index:5;}
+  .logo{width:34px; height:34px; border-radius:10px; background:var(--violet); color:#fff;
+    display:flex; align-items:center; justify-content:center; font-weight:800; font-size:19px; flex:0 0 auto;}
+  .brand{font-weight:700; font-size:16px; white-space:nowrap;}
+  header h1{font-size:15px; font-weight:600; color:var(--muted); margin:0; white-space:nowrap;
+    border-left:1px solid var(--line); padding-left:12px;}
+  #projName{border:1px solid transparent; border-radius:9px; padding:7px 10px; font-size:14px;
+    min-width:0; flex:0 1 200px; color:var(--ink); background:#f7f7f9;}
+  #projName:focus{outline:none; border-color:var(--violet); background:#fff;}
+  .hspace{flex:1;}
+  .hbtn{border:1px solid var(--line); background:#fff; border-radius:11px; padding:9px 14px;
+    font-size:14px; font-weight:600; color:var(--ink); display:inline-flex; align-items:center; gap:7px;}
+  .hbtn.primary{background:var(--violet); border-color:var(--violet); color:#fff;}
+  .hbtn.primary:active{background:var(--violet-dk);}
+  /* ---------- layout ---------- */
+  #main{flex:1; display:flex; min-height:0;}
+  /* left rail */
+  #rail{flex:0 0 54px; background:#fff; border-right:1px solid var(--line);
+    display:flex; flex-direction:column; align-items:center; padding:8px 0; gap:2px; z-index:4;}
+  .rbtn{width:42px; height:42px; border:none; background:transparent; border-radius:11px;
+    display:flex; align-items:center; justify-content:center; color:#4b5563;}
+  .rbtn svg{width:21px; height:21px;}
+  .rbtn.on{background:#ede9fe; color:var(--violet);}
+  .rbtn:active{background:#e5e7eb;}
+  .rdiv{width:26px; border-top:1px solid var(--line); margin:6px 0;}
+  /* workspace */
+  #workspace{flex:1; position:relative; overflow:hidden; min-width:0;
+    background:var(--work);}
+  #pageWrap{position:absolute; left:0; top:0; transform-origin:0 0;}
+  #page{position:relative; background:#fff; box-shadow:0 10px 34px rgba(20,20,40,.18);
+    border-radius:4px; overflow:hidden;
+    background-image:radial-gradient(#d7dae0 1px, transparent 1px); background-size:18px 18px;}
+  #view{display:block; width:100%; height:100%; touch-action:none;}
+  #emptyState{position:absolute; inset:0; display:flex; flex-direction:column; gap:12px;
+    align-items:center; justify-content:center; text-align:center; padding:20px; background:#fff;}
+  #emptyState .big{font-size:17px; font-weight:700;}
+  #emptyState .small{color:var(--muted); font-size:13px;}
+  .pill{position:absolute; background:#fff; border:1px solid var(--line); border-radius:999px;
+    padding:6px 12px; font-size:12.5px; font-weight:600; box-shadow:0 2px 10px rgba(20,20,40,.08);
+    display:flex; align-items:center; gap:7px; z-index:3; white-space:nowrap;}
+  #pillKind{left:12px; top:12px;}
+  #pillKind .arr{color:var(--violet);}
+  #pillMode{right:12px; top:12px; color:var(--ink);}
+  #pillMode b{color:var(--violet); font-weight:700;}
+  #splitLine{position:absolute; top:0; bottom:0; width:2px; background:var(--violet); z-index:2;
+    margin-left:-1px; display:none;}
+  #splitHandle{position:absolute; top:50%; width:34px; height:34px; border-radius:50%;
+    background:var(--violet); color:#fff; transform:translate(-50%,-50%); z-index:2; display:none;
+    align-items:center; justify-content:center; font-size:14px; box-shadow:0 3px 10px rgba(20,20,40,.25);
+    pointer-events:none;}
+  #cmpPill{left:50%; bottom:14px; transform:translateX(-50%);}
+  #cmpPill b{color:var(--violet);}
+  #zoomCluster{position:absolute; right:12px; bottom:14px; z-index:3; background:#fff;
+    border:1px solid var(--line); border-radius:999px; display:flex; align-items:center;
+    box-shadow:0 2px 10px rgba(20,20,40,.08); overflow:hidden;}
+  #zoomCluster button{border:none; background:transparent; width:38px; height:36px; font-size:16px; color:var(--ink);}
+  #zoomCluster .zv{min-width:48px; text-align:center; font-size:13px; font-weight:600;}
+  #zoomCluster .sep{width:1px; height:20px; background:var(--line);}
+  #zoomCluster .fitb{width:auto; padding:0 12px; font-size:13px; font-weight:600;}
+  /* right panel */
+  #panel{flex:0 0 332px; width:332px; background:var(--panel); border-left:1px solid var(--line);
+    overflow-y:auto; padding:16px 16px 28px; z-index:4;}
+  #panel .kick{color:var(--violet); font-size:11.5px; font-weight:700; letter-spacing:.06em; text-transform:uppercase;}
+  #panel h2{margin:2px 0 0; font-size:19px;}
+  .tabs{display:flex; gap:6px; margin:14px 0 16px; background:#f3f4f6; border-radius:12px; padding:4px;}
+  .tabs button{flex:1; border:none; background:transparent; padding:8px 4px; border-radius:9px;
+    font-size:13.5px; font-weight:600; color:var(--muted);}
+  .tabs button.on{background:#111827; color:#fff;}
+  .card{border:1px solid var(--line); border-radius:var(--radius); padding:12px; display:flex;
+    align-items:center; gap:11px; width:100%; background:#fff; text-align:left;}
+  #srcThumb{width:46px; height:46px; border-radius:9px; object-fit:cover; background:#f3f4f6; flex:0 0 auto;}
+  .card .t1{font-size:12px; color:var(--muted);}
+  .card .t2{font-size:14px; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:150px;}
+  .card .rep{margin-left:auto; border:1px solid var(--line); background:#fff; border-radius:9px;
+    padding:7px 11px; font-size:13px; font-weight:600; flex:0 0 auto;}
+  section.blk{margin-top:20px;}
+  .blkhead{display:flex; align-items:baseline; justify-content:space-between; gap:8px;}
+  .blkhead h3{margin:0; font-size:15px;}
+  .blkhead .sub{color:var(--muted); font-size:12.5px; margin-top:2px;}
+  .blkhead .val{color:var(--violet); font-weight:700; font-size:13.5px; white-space:nowrap;}
+  .blkhead .modepill{background:#f3f4f6; border-radius:999px; padding:4px 11px; font-size:12.5px; font-weight:700;}
+  .grid2{display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:10px;}
+  .qpill{border:1px solid var(--line); background:#fff; border-radius:999px; padding:10px 8px;
+    font-size:13.5px; font-weight:600; display:flex; align-items:center; justify-content:center; gap:6px;}
+  .qpill.on{border-color:var(--violet); color:var(--violet); background:#f5f3ff;}
+  .qpill .dot{width:7px; height:7px; border-radius:50%; background:var(--violet); display:none;}
+  .qpill.on .dot{display:block;}
+  .ctl{margin-top:13px;}
+  .ctl .lab{display:flex; justify-content:space-between; font-size:13.5px; font-weight:600;}
+  .ctl .lab .v{color:var(--violet); font-weight:700;}
+  input[type=range]{-webkit-appearance:none; appearance:none; width:100%; height:26px; background:transparent; margin:2px 0 0;}
+  input[type=range]::-webkit-slider-runnable-track{height:6px; border-radius:3px; background:var(--track,#e5e7eb);}
+  input[type=range]::-webkit-slider-thumb{-webkit-appearance:none; width:20px; height:20px; border-radius:50%;
+    background:#fff; border:2.5px solid var(--violet); margin-top:-7px; box-shadow:0 1px 5px rgba(20,20,40,.25);}
+  input[type=range]::-moz-range-track{height:6px; border-radius:3px; background:#e5e7eb;}
+  input[type=range]::-moz-range-progress{height:6px; border-radius:3px; background:var(--violet);}
+  input[type=range]::-moz-range-thumb{width:15px; height:15px; border-radius:50%; background:#fff; border:2.5px solid var(--violet);}
+  #moreBtn{margin-top:16px; width:100%; border:none; background:transparent; display:flex; justify-content:space-between;
+    align-items:center; font-size:14px; font-weight:700; padding:6px 0; color:var(--ink);}
+  #moreBtn .chev{color:var(--muted); transition:transform .15s;}
+  #moreWrap.open + #moreBtn .chev{transform:rotate(180deg);}
+  .modes{display:flex; flex-wrap:wrap; gap:7px; margin-top:10px;}
+  .modes button{border:1px solid var(--line); background:#fff; border-radius:999px; padding:8px 13px;
+    font-size:13px; font-weight:600;}
+  .modes button.on{border-color:var(--violet); color:var(--violet); background:#f5f3ff; box-shadow:0 0 0 1px var(--violet) inset;}
+  .tools{display:flex; flex-wrap:wrap; gap:7px; margin-top:10px;}
+  .tools button{border:1px solid var(--line); background:#fff; border-radius:11px; padding:9px 12px;
+    font-size:13px; font-weight:600;}
+  .tools button.on{background:#111827; color:#fff; border-color:#111827;}
+  .swatches{display:flex; gap:10px; margin-top:11px;}
+  .sw{width:34px; height:34px; border-radius:50%; border:2px solid var(--line); padding:0;}
+  .sw.on{border-color:var(--violet); box-shadow:0 0 0 2px #fff, 0 0 0 4px var(--violet);}
+  .tglcard{margin-top:10px; width:100%; text-align:left; border:1px solid var(--line); background:#fff;
+    border-radius:var(--radius); padding:12px 13px; display:flex; gap:10px; align-items:flex-start;}
+  .tglcard .tt{font-size:14px; font-weight:700;}
+  .tglcard .td{font-size:12.5px; color:var(--muted); margin-top:1px;}
+  .tglcard .st{margin-left:auto; font-size:12px; font-weight:700; color:var(--muted); flex:0 0 auto; padding-top:2px;}
+  .tglcard.on{border-color:var(--violet); background:#f5f3ff;}
+  .tglcard.on .st{color:var(--violet);}
+  .seg2{display:flex; gap:8px; margin-top:10px;}
+  .seg2 button{flex:1; border:1px solid var(--line); background:#fff; border-radius:11px; padding:10px;
+    font-size:13.5px; font-weight:600;}
+  .seg2 button.on{background:#111827; color:#fff; border-color:#111827;}
+  #resetBtn{margin-top:22px; border:none; background:transparent; color:var(--muted);
+    font-size:13.5px; font-weight:600; padding:6px 0;}
+  .fmtcard{margin-top:10px; width:100%; text-align:left; border:1px solid var(--line); background:#fff;
+    border-radius:var(--radius); padding:13px; display:flex; gap:11px; align-items:flex-start;}
+  .fmtcard.on{border-color:var(--violet); background:#f5f3ff; box-shadow:0 0 0 1px var(--violet) inset;}
+  .fmtcard .ft{font-size:15px; font-weight:700;}
+  .fmtcard .fd{font-size:12.5px; color:var(--muted); margin-top:1px;}
+  .fmtcard .fm{margin-left:auto; font-size:12px; font-weight:700; color:var(--violet); flex:0 0 auto;}
+  #dlBtn,#btnDownload{margin-top:16px; width:100%; border:none; border-radius:12px; background:var(--violet); color:#fff;
+    padding:14px; font-size:15px; font-weight:700;}
+  #btnDownload:active{background:var(--violet-dk);}
+  #dlBtn:active{background:var(--violet-dk);}
+  .note{color:var(--muted); font-size:12.5px; line-height:1.45; margin-top:10px;}
+  #status{position:fixed; left:50%; bottom:18px; transform:translateX(-50%) translateY(20px); background:#111827;
+    color:#fff; padding:10px 16px; border-radius:999px; font-size:13.5px; opacity:0; pointer-events:none;
+    transition:all .2s; z-index:50; max-width:88vw; text-align:center;}
+  #status.show{opacity:1; transform:translateX(-50%) translateY(0);}
   .hidden{display:none !important;}
-  #status{
-    position:fixed; left:50%; bottom:18px; transform:translateX(-50%);
-    background:#000; border:1px solid var(--accent); color:var(--txt);
-    padding:10px 18px; border-radius:24px; font-size:14px; z-index:50;
-    opacity:0; pointer-events:none; transition:opacity .25s; max-width:92vw; text-align:center;
-  }
-  #status.show{opacity:1;}
-  footer{padding:6px 18px 26px; color:var(--muted); font-size:13px;}
-  footer strong{color:var(--txt);}
-  /* print sheet: only visible while printing */
-  #printSheet{display:none;}
-  @media print{
-    body.printing #app, body.printing footer{display:none !important;}
-    body.printing #printSheet{display:block !important;}
-    #printSheet img{width:100%; height:auto; display:block;}
-    @page{margin:12mm;}
+  @media (max-width:900px){
+    body{overflow:auto;}
+    #main{flex-direction:column;}
+    #workspace{flex:0 0 52vh; order:1;}
+    #rail{order:2; flex:0 0 auto; flex-direction:row; overflow-x:auto; border-right:none;
+      border-top:1px solid var(--line); padding:4px 8px; justify-content:flex-start;}
+    .rdiv{width:0; height:26px; border-top:none; border-left:1px solid var(--line); margin:0 6px;}
+    #panel{order:3; flex:0 0 auto; width:100%; border-left:none; overflow:visible;}
+    header h1{display:none;}
+    #projName{flex:1;}
   }
 </style>
 </head>
 <body>
-<div id="app">
 
-  <header class="topbar">
-    <h1>SHADOW<span class="dot">/</span>BORN</h1>
-  </header>
+<header>
+  <div class="logo">S</div>
+  <div class="brand">Shadowborn</div>
+  <h1>Create a Stencil Online</h1>
+  <input id="projName" type="text" value="Untitled Stencil" aria-label="Project name">
+  <div class="hspace"></div>
+  <button class="hbtn" id="btnUploadTop">Upload</button>
+  <button class="hbtn primary" id="btnExportTop">Export</button>
+</header>
 
-  <!-- 1. IMAGE INPUT -->
-  <section class="card" id="inputCard">
-    <h2>1 · Image</h2>
-    <div id="dropZone">
-      <p>Drop an image here, or</p>
-      <div class="btnrow">
-        <label class="btn primary">Choose image
-          <input type="file" id="fileInput" accept="image/*" hidden>
-        </label>
-        <label class="btn">&#128247; Camera
-          <input type="file" id="camInput" accept="image/*" capture="environment" hidden>
-        </label>
-      </div>
-      <p id="imgInfo" class="muted">No image loaded.</p>
-    </div>
-  </section>
+<div id="main">
+  <!-- left tool rail -->
+  <nav id="rail" aria-label="Tools">
+    <button class="rbtn on" id="rlBackground" title="Background — switch between a transparent stencil and a white page"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="3"/><path d="M3 15l5-5 4 4 3-3 6 6"/></svg></button>
+    <button class="rbtn on" id="rlCompare" title="Compare — drag across the canvas to compare the original image and stencil"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v18"/><path d="M8 8l-4 4 4 4M16 8l4 4-4 4"/></svg></button>
+    <button class="rbtn" id="rlRotate" title="Rotate — rotate the original and stencil 90 degrees clockwise"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 12a8 8 0 1 1-2.3-5.6"/><path d="M20 3v4h-4"/></svg></button>
+    <button class="rbtn" id="rlMirror" title="Mirror — mirror the stencil for transfer paper or reverse painting"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v18" stroke-dasharray="3 3"/><path d="M9 7L4 12l5 5M15 7l5 5-5 5"/></svg></button>
+    <button class="rbtn" id="rlInvert" title="Invert — swap the solid and open areas of the stencil"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 3a9 9 0 0 1 0 18z" fill="currentColor" stroke="none"/></svg></button>
+    <button class="rbtn on" id="rlDenoise" title="Denoise — clear loose specks and pinholes before lines are thickened"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="7" cy="7" r="1.4" fill="currentColor"/><circle cx="16" cy="10" r="1.4" fill="currentColor"/><circle cx="10" cy="16" r="1.4" fill="currentColor"/><circle cx="18" cy="18" r="1.4" fill="currentColor"/></svg></button>
+    <button class="rbtn" id="rlCloseGaps" title="Close Gaps — close tiny breaks in stencil lines"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 12h5M15 12h5"/><path d="M9 9l3 3-3 3M15 9l-3 3 3 3"/></svg></button>
+    <div class="rdiv"></div>
+    <button class="rbtn" id="rlFit" title="Fit Canvas — fit the stencil page back into the workspace"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg></button>
+    <button class="rbtn" id="rlReset" title="Reset — restore all default stencil settings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 12a8 8 0 1 0 2.3-5.6"/><path d="M4 3v4h4"/></svg></button>
+  </nav>
 
-  <!-- 2. PREVIEW -->
-  <section class="card" id="previewCard">
-    <h2>2 · Preview</h2>
-    <div class="segrow">
-      <div class="seg" id="viewSeg" style="flex:1">
-        <button data-view="stencil" class="on">Stencil</button>
-        <button data-view="compare">Compare</button>
-        <button data-view="original">Original</button>
-      </div>
-      <div class="zoomrow">
-        <button id="zoomOut" aria-label="Zoom out">&minus;</button>
-        <button id="zoomFit" aria-label="Fit to screen" style="font-size:13px">Fit</button>
-        <button id="zoomIn" aria-label="Zoom in">+</button>
-      </div>
-    </div>
-    <div id="viewport">
-      <canvas id="view"></canvas>
-      <div class="hint" id="viewHint">Load an image to start.<br>Drag to pan &middot; pinch or buttons to zoom.</div>
-    </div>
-    <div id="dock">
-      <div class="seg" id="modeSeg">
-        <button data-mode="threshold">Threshold</button>
-        <button data-mode="edge" class="on">Edge</button>
-        <button data-mode="thinline">Thin Line</button>
-        <button data-mode="adaptive">Adaptive</button>
-        <button data-mode="layers">Color Layers</button>
-      </div>
-      <div id="presetRow">
-        <button data-preset="bold">Bold Cut</button>
-        <button data-preset="clean" class="on">Clean Outline</button>
-        <button data-preset="fine">Fine Line</button>
-        <button data-preset="print">Print Ready</button>
-      </div>
-      <div class="ctl">
-        <div class="lab"><span>Threshold</span><span class="v" id="thresholdVal">54</span></div>
-        <input type="range" id="sldThreshold" min="0" max="100" value="54" step="1">
-      </div>
-      <div class="ctl">
-        <div class="lab"><span>Detail</span><span class="v" id="detailVal">68</span></div>
-        <input type="range" id="sldDetail" min="0" max="100" value="68" step="1">
-      </div>
-      <div class="ctl">
-        <div class="lab"><span>Line weight</span><span class="v" id="lineWeightVal">52</span></div>
-        <input type="range" id="sldLineWeight" min="0" max="100" value="52" step="1">
-      </div>
-      <div class="ctl">
-        <div class="lab"><span>Contrast</span><span class="v" id="contrastVal">78</span></div>
-        <input type="range" id="sldContrast" min="0" max="100" value="78" step="1">
-      </div>
-      <div class="ctl">
-        <div class="lab"><span>Shadow cleanup</span><span class="v" id="shadowVal">64</span></div>
-        <input type="range" id="sldShadow" min="0" max="100" value="64" step="1">
+  <!-- centre workspace -->
+  <div id="workspace">
+    <div id="pageWrap">
+      <div id="page">
+        <canvas id="view" width="16" height="16"></canvas>
+        <div id="splitLine"></div>
+        <div id="splitHandle">&#8596;</div>
+        <div id="emptyState">
+          <div class="big">Start with an image</div>
+          <div class="small">Photos, logos, sketches and flat artwork.<br>PNG, JPG or WebP. Processed on this device only.</div>
+          <button class="hbtn primary" id="btnChoose">Choose image</button>
+          <button class="hbtn" id="btnCamera">Camera</button>
+          <div class="small">…or drop an image file anywhere on this page.</div>
+        </div>
       </div>
     </div>
-  </section>
-
-  <!-- 3. TUNE -->
-  <section class="card" id="procCard">
-    <h2>3 · Tune</h2>
-
-    <div class="tglrow">
-      <button class="tgl on" id="tglDenoise" aria-pressed="true">Denoise</button>
-      <button class="tgl on" id="tglCloseGaps" aria-pressed="true">Close Gaps</button>
+    <div class="pill" id="pillKind">Original <span class="arr">&#8594;</span> Stencil</div>
+    <div class="pill" id="pillMode">Edge / <b>Clean Outline</b></div>
+    <div class="pill" id="cmpPill">Drag to compare <b id="cmpPct">52%</b></div>
+    <div id="zoomCluster">
+      <button id="zoomOut" aria-label="Zoom out">&minus;</button>
+      <div class="zv" id="zoomVal">100%</div>
+      <button id="zoomIn" aria-label="Zoom in">+</button>
+      <div class="sep"></div>
+      <button class="fitb" id="zoomFit">Fit</button>
     </div>
-    <div class="tglrow">
-      <button class="tgl" id="tglInvert" aria-pressed="false">Invert</button>
-      <button class="tgl" id="tglWhiteBg" aria-pressed="false">White background</button>
+  </div>
+
+  <!-- right control panel -->
+  <aside id="panel">
+    <div class="kick">Editor</div>
+    <h2>Stencil controls</h2>
+    <div class="tabs" id="tabs">
+      <button data-tab="adjust" class="on">Adjust</button>
+      <button data-tab="ai">AI Cleanup</button>
+      <button data-tab="export">Export</button>
     </div>
 
-    <div class="ctl">
-      <div class="lab"><span>Ink opacity</span><span class="v" id="opacityVal">100</span></div>
-      <input type="range" id="sldOpacity" min="20" max="100" value="100" step="1">
-    </div>
-
-    <div class="ctl">
-      <div class="lab"><span>Ink color</span></div>
-      <div class="seg" id="inkSeg">
-        <button data-ink="#000000" class="on">Black</button>
-        <button data-ink="#d42a1e">Red</button>
-        <button data-ink="#1e56d4">Blue</button>
-        <button data-ink="#1e9e4a">Green</button>
+    <!-- ADJUST -->
+    <div id="tab-adjust">
+      <div class="card">
+        <img id="srcThumb" alt="">
+        <div>
+          <div class="t1">Current stencil source</div>
+          <div class="t2" id="srcName">No image yet</div>
+        </div>
+        <button class="rep" id="btnReplace">Replace</button>
       </div>
+
+      <section class="blk">
+        <div class="blkhead">
+          <div><h3>Quick style</h3><div class="sub">Choose a practical starting point.</div></div>
+          <div class="val" id="styleName">Clean Outline</div>
+        </div>
+        <div class="grid2" id="presetGrid">
+          <button class="qpill" data-preset="bold"><span class="dot"></span>Bold Cut</button>
+          <button class="qpill on" data-preset="clean"><span class="dot"></span>Clean Outline</button>
+          <button class="qpill" data-preset="fine"><span class="dot"></span>Fine Line</button>
+          <button class="qpill" data-preset="print"><span class="dot"></span>Print Ready</button>
+        </div>
+      </section>
+
+      <section class="blk">
+        <div class="blkhead">
+          <div><h3>Stencil shape</h3><div class="sub">Updates automatically as you drag.</div></div>
+          <div class="modepill" id="modePill">Edge</div>
+        </div>
+        <div class="ctl">
+          <div class="lab"><span>Threshold</span><span class="v" id="thresholdVal">54%</span></div>
+          <input type="range" id="sldThreshold" min="0" max="100" value="54" step="1">
+        </div>
+        <div class="ctl">
+          <div class="lab"><span>Line weight</span><span class="v" id="lineWeightVal">52%</span></div>
+          <input type="range" id="sldLineWeight" min="0" max="100" value="52" step="1">
+        </div>
+        <div class="ctl">
+          <div class="lab"><span>Contrast</span><span class="v" id="contrastVal">78%</span></div>
+          <input type="range" id="sldContrast" min="0" max="100" value="78" step="1">
+        </div>
+        <div id="moreWrap" class="hidden">
+          <div class="ctl">
+            <div class="lab"><span>Detail</span><span class="v" id="detailVal">68%</span></div>
+            <input type="range" id="sldDetail" min="0" max="100" value="68" step="1">
+          </div>
+          <div class="ctl">
+            <div class="lab"><span>Shadow cleanup</span><span class="v" id="shadowVal">64%</span></div>
+            <input type="range" id="sldShadow" min="0" max="100" value="64" step="1">
+          </div>
+          <div class="ctl">
+            <div class="lab"><span>Ink opacity</span><span class="v" id="opacityVal">100%</span></div>
+            <input type="range" id="sldOpacity" min="20" max="100" value="100" step="1">
+          </div>
+        </div>
+        <button id="moreBtn">More controls <span class="chev">&#9662;</span></button>
+      </section>
+
+      <section class="blk">
+        <div class="blkhead"><div><h3>Conversion mode</h3></div></div>
+        <div class="modes" id="modeSeg">
+          <button data-mode="threshold">Threshold</button>
+          <button data-mode="edge" class="on">Edge</button>
+          <button data-mode="thinline">Thin Line</button>
+          <button data-mode="adaptive">Adaptive</button>
+          <button data-mode="layers">Color Layers</button>
+        </div>
+      </section>
+
+      <section class="blk">
+        <div class="blkhead">
+          <div><h3>Local cleanup tools</h3></div>
+          <div class="val" style="color:var(--muted)">No credits</div>
+        </div>
+        <div class="tools">
+          <button id="btnRotate">Rotate 0&deg;</button>
+          <button id="btnInvert">Invert</button>
+          <button id="btnDenoise" class="on">Denoise</button>
+          <button id="btnCloseGaps">Close Gaps</button>
+        </div>
+      </section>
+
+      <section class="blk">
+        <div class="blkhead">
+          <div><h3>Ink color</h3></div>
+          <div class="val" style="color:var(--ink)" id="inkName">Black</div>
+        </div>
+        <div class="swatches" id="inkSeg">
+          <button class="sw on" data-ink="#000000" data-name="Black" style="background:#000" aria-label="Use Black stencil ink"></button>
+          <button class="sw" data-ink="#d42a1e" data-name="Red" style="background:#d42a1e" aria-label="Use Red stencil ink"></button>
+          <button class="sw" data-ink="#1e56d4" data-name="Blue" style="background:#1e56d4" aria-label="Use Blue stencil ink"></button>
+          <button class="sw" data-ink="#1e9e4a" data-name="Green" style="background:#1e9e4a" aria-label="Use Green stencil ink"></button>
+        </div>
+      </section>
+
+      <section class="blk">
+        <button class="tglcard on" id="tglTransparent">
+          <div><div class="tt">Transparent background</div><div class="td">Best for PNG and cutting workflows</div></div>
+          <div class="st">On</div>
+        </button>
+        <button class="tglcard" id="tglMirror">
+          <div><div class="tt">Mirror output</div><div class="td">Useful for transfer paper</div></div>
+          <div class="st">Off</div>
+        </button>
+      </section>
+
+      <section class="blk">
+        <div class="blkhead"><div><h3>Page size</h3></div></div>
+        <div class="seg2" id="pageSeg">
+          <button data-page="a4">A4</button>
+          <button data-page="letter" class="on">Letter</button>
+        </div>
+      </section>
+
+      <button id="resetBtn">Reset settings</button>
     </div>
-  </section>
 
-  <!-- 4. EXPORT -->
-  <section class="card" id="exportCard">
-    <h2>4 · Export</h2>
-    <div class="btnrow">
-      <button class="btn primary" id="btnPng">PNG</button>
-      <button class="btn" id="btnPdf">PDF <span class="muted">(Letter)</span></button>
+    <!-- AI CLEANUP -->
+    <div id="tab-ai" class="hidden">
+      <section class="blk" style="margin-top:2px">
+        <div class="blkhead"><div><h3>Clean up with AI</h3></div></div>
+        <p class="note" style="margin-top:8px">AI Cleanup is optional. It repairs rough edges and simplifies busy detail after the free local conversion.</p>
+        <p class="note">On stencilmaker.org this runs on their server and spends credits — it is the one part of their editor that does not run on your device, so it isn't part of this copy. Everything else here is.</p>
+        <button id="dlBtn" disabled style="background:#9ca3af">AI Cleanup</button>
+        <p class="note">Try the free local tools first. Open Adjust and use Denoise or Close Gaps.</p>
+      </section>
     </div>
-    <p class="muted" id="exportNote">Exports the current stencil, in your ink color and opacity, on a transparent background unless White background is on.</p>
-  </section>
 
-</div><!-- /app -->
-
-<footer>
-  <strong>Private by design.</strong> Every pixel is processed on this device.
-  No uploads, no accounts, no analytics, no network requests &mdash; this page
-  works fully offline, including inside the app. Your images never leave your hands.
-</footer>
+    <!-- EXPORT -->
+    <div id="tab-export" class="hidden">
+      <section class="blk" style="margin-top:2px">
+        <div class="blkhead">
+          <div><h3>Export your stencil</h3><div class="sub">Choose a file for printing or cutting.</div></div>
+        </div>
+        <button class="fmtcard on" data-fmt="png">
+          <div><div class="ft">PNG</div><div class="fd">Print-ready PNG &middot; Best for print and sharing</div></div>
+          <div class="fm">300 DPI</div>
+        </button>
+        <button class="fmtcard" data-fmt="pdf">
+          <div><div class="ft">PDF</div><div class="fd">Print-ready PDF &middot; Best for paper stencils</div></div>
+          <div class="fm" id="pdfSizeLbl">Letter</div>
+        </button>
+        <p class="note" id="pngNote">PNG export uses the selected paper size (Letter) at 300 DPI, with a half-inch margin.</p>
+        <button id="btnDownload">Download PNG</button>
+      </section>
+    </div>
+  </aside>
+</div>
 
 <div id="status" role="status"></div>
 
+<input type="file" id="fileInput" accept="image/*" class="hidden">
+<input type="file" id="camInput" accept="image/*" capture="environment" class="hidden">
+
 <script>
 "use strict";
-/* =====================================================================
-   PART 1 — PURE IMAGE-PROCESSING CORE (no DOM access in this section)
-   All functions operate on typed arrays so they can be unit-tested in
-   Node. Mask convention: Uint8Array, 1 = ink (black / "cut"), 0 = paper.
-   ===================================================================== */
+/* ================= state ================= */
+const $=function(id){ return document.getElementById(id); };
+const DEFAULTS={mode:"edge",threshold:54,detail:68,lineWeight:52,contrast:78,shadow:64,
+  denoise:true,closeGaps:false,invert:false,opacity:100,ink:"#000000",
+  transparent:true,mirror:false,pageSize:"letter"};
+const S={
+  srcCanvas:null, origCanvas:null, srcW:0, srcH:0, gray:null, grayDirty:true,
+  mask:null, tone:null, rot:0,
+  settings:Object.assign({},DEFAULTS),
+  styleName:"Clean Outline", fmt:"png", compare:true, cmpSplit:0.52
+};
+const Z={s:1,tx:0,ty:0,fit:1}; // zoom/pan; s is absolute scale, fit = fitted scale
+const MAXDIM=1800; // working size: at most 1800 px on the long side
 
-/* Grayscale + brightness/contrast in one pass.
-   px: Uint8ClampedArray RGBA from canvas. brightness: -120..120,
-   contrast: 0.2..3.0 multiplier. Returns Uint8Array gray. */
+let statusTimer=null;
+function status(msg){
+  const el=$("status"); el.textContent=msg; el.classList.add("show");
+  clearTimeout(statusTimer);
+  statusTimer=setTimeout(function(){ el.classList.remove("show"); },2600);
+}
+function download(url,name){
+  const a=document.createElement("a");
+  a.href=url; a.download=name;
+  document.body.appendChild(a); a.click(); a.remove();
+}
+
+/* ================= image loading ================= */
+function loadFile(file){
+  if(!file||!file.type||file.type.indexOf("image/")!==0){
+    status("That doesn't look like an image file."); return;
+  }
+  const rd=new FileReader();
+  rd.onload=function(){
+    const img=new Image();
+    img.onload=function(){
+      let w=img.naturalWidth, h=img.naturalHeight;
+      const m=Math.max(w,h);
+      if(m>MAXDIM){ const k=MAXDIM/m; w=Math.round(w*k); h=Math.round(h*k); }
+      const c=document.createElement("canvas"); c.width=w; c.height=h;
+      c.getContext("2d").drawImage(img,0,0,w,h);
+      S.srcCanvas=c; S.origCanvas=c; S.srcW=w; S.srcH=h; S.rot=0;
+      S.gray=null; S.grayDirty=true; S.mask=null; S.tone=null;
+      $("srcName").textContent=file.name||"Image";
+      $("srcThumb").src=c.toDataURL("image/png");
+      $("emptyState").classList.add("hidden");
+      $("btnRotate").innerHTML="Rotate 0&deg;";
+      fitView(); process();
+      status("Image loaded — "+w+"×"+h+" working size.");
+    };
+    img.onerror=function(){ status("That image couldn't be read."); };
+    img.src=rd.result;
+  };
+  rd.readAsDataURL(file);
+}
+function rotateSrc(){
+  if(!S.srcCanvas) return;
+  const c=document.createElement("canvas");
+  c.width=S.srcH; c.height=S.srcW;
+  const ctx=c.getContext("2d");
+  ctx.translate(c.width/2,c.height/2); ctx.rotate(Math.PI/2);
+  ctx.drawImage(S.srcCanvas,-S.srcW/2,-S.srcH/2);
+  S.srcCanvas=c; S.srcW=c.width; S.srcH=c.height;
+  S.rot=(S.rot+90)%360;
+  S.gray=null; S.grayDirty=true;
+  $("btnRotate").innerHTML="Rotate "+S.rot+"&deg;";
+  fitView(); process();
+}
+
+/* ================= ENGINE (ours) ================= */
 function computeGray(px, w, h, brightness, contrast){
   const g = new Uint8Array(w*h);
   // brightness/contrast baked into a 256-entry LUT: per-pixel work is then
@@ -335,8 +483,6 @@ function computeGray(px, w, h, brightness, contrast){
   return g;
 }
 
-/* Separable box blur (true 2D, edge-replicated), radius 0 = copy.
-   Sliding-window implementation: O(w*h) regardless of radius. */
 function boxBlur(gray, w, h, radius){
   if(radius<=0) return gray.slice();
   const r = Math.max(1, radius|0), inv = 1/(2*r+1);
@@ -372,15 +518,12 @@ function boxBlur(gray, w, h, radius){
   return out;
 }
 
-/* Binary threshold: dark pixels become ink. */
 function thresholdMask(gray, w, h, level){
   const m = new Uint8Array(w*h);
   for(let i=0;i<w*h;i++) m[i] = gray[i] < level ? 1 : 0;
   return m;
 }
 
-/* Otsu's method: threshold maximizing between-class variance.
-   One-tap sane starting point so the level slider isn't hunted blind. */
 function otsuLevel(gray){
   const hist=new Array(256).fill(0);
   for(let i=0;i<gray.length;i++) hist[gray[i]]++;
@@ -401,9 +544,6 @@ function otsuLevel(gray){
   return thresh;
 }
 
-/* Tone terciles of the gray histogram: the dark/mid and mid/light
-   borders. The Threshold slider places its cut relative to these, so
-   one number adapts to each picture (stencilmaker.org model). */
 function toneCuts(gray){
   const hist=new Uint32Array(256);
   for(let i=0;i<gray.length;i++) hist[gray[i]]++;
@@ -416,19 +556,13 @@ function toneCuts(gray){
   }
   return {lo:lo, hi:hi};
 }
-/* Threshold slider (0-100) -> gray cut level, anchored to terciles:
-   30 cuts at the dark/mid border; 100 reaches most of the way to the
-   mid/light border; below 30 the cut sinks under the dark/mid border. */
+
 function cutLevel(gray, t){
   const c=toneCuts(gray);
   if(t<=30) return Math.round(c.lo*(t/30));
   return Math.round(c.lo + (t-30)/70*(c.hi-c.lo)*0.92);
 }
-/* Shadow cleanup: level an uneven backdrop to paper-white. The
-   backdrop is estimated by a heavy blur (our boxBlur); each pixel is
-   lifted toward white by how dark its backdrop is. amt 0-100 = how
-   much of the lift to apply. Left alone when the border reads dark
-   (backdrop is subject, not backdrop). */
+
 function shadowLift(gray,w,h,amt){
   if(amt<=0) return gray;
   let bsum=0, bn=0;
@@ -445,8 +579,7 @@ function shadowLift(gray,w,h,amt){
   }
   return out;
 }
-/* Local contrast: sharpen each pixel away from its local average
-   (unsharp masking on the gray, built from boxBlur). amt 0-100. */
+
 function localContrast(gray,w,h,amt){
   if(amt<=0) return gray;
   const r=Math.max(2,(Math.min(w,h)/48)|0);
@@ -459,10 +592,37 @@ function localContrast(gray,w,h,amt){
   return out;
 }
 
-/* Sauvola adaptive threshold: per-pixel threshold from local mean/std.
-   This is the maximum-detail baseline — uneven lighting no longer crushes
-   shadows or blows highlights the way a single global threshold does.
-   Integral images make it O(w*h). */
+function xdogMask(gray,w,h,v){
+  const r1=2, r2=3;
+  const b1=boxBlur(gray,w,h,r1), b2=boxBlur(gray,w,h,r2);
+  const n=w*h;
+  const eps=-Math.max(0.5, 2*Math.pow(2,(100-v)/50));
+  const m=new Uint8Array(n);
+  for(let i=0;i<n;i++) m[i]=(b1[i]-0.99*b2[i])<eps?1:0;
+  return m;
+}
+
+function xdogSoftMask(gray,w,h,v){
+  const r1=1, r2=2;
+  const b1=boxBlur(gray,w,h,r1), b2=boxBlur(gray,w,h,r2);
+  const n=w*h;
+  const eps=-Math.max(0.3, 1.2*Math.pow(2,(83-v)/50));
+  const m=new Uint8Array(n);
+  for(let i=0;i<n;i++) m[i]=(b1[i]-0.99*b2[i])<eps?1:0;
+  return m;
+}
+
+function invertMask(mask){
+  for(let i=0;i<mask.length;i++) mask[i]^=1;
+  return mask;
+}
+
+function detailK(v){ return 0.5-(v/100)*0.4; }
+
+function autoWin(w,h){
+  return Math.max(15,Math.min(61,Math.round(Math.min(w,h)/32)));
+}
+
 function integralImages(gray,w,h){
   const W=w+1, I=new Float64Array(W*(h+1)), I2=new Float64Array(W*(h+1));
   for(let y=0;y<h;y++){
@@ -477,9 +637,11 @@ function integralImages(gray,w,h){
   }
   return {I:I,I2:I2,W:W};
 }
+
 function rectSum(I,W,x0,y0,x1,y1){
   return I[y1*W+x1]-I[y0*W+x1]-I[y1*W+x0]+I[y0*W+x0];
 }
+
 function sauvolaMask(gray,w,h,k,win){
   const T=integralImages(gray,w,h), I=T.I, I2=T.I2, W=T.W;
   const m=new Uint8Array(w*h), R=128, r=(win>>1);
@@ -497,27 +659,7 @@ function sauvolaMask(gray,w,h,k,win){
   }
   return m;
 }
-/* window scales with image size; k: 0.5 = clean classic, 0.1 = max detail */
-function autoWin(w,h){
-  return Math.max(15,Math.min(61,Math.round(Math.min(w,h)/32)));
-}
-function detailK(v){ return 0.5-(v/100)*0.4; }
 
-/* XDoG line art: extended Difference of Gaussians -> clean ink lines.
-   v (0-200): line density. The ink threshold is FIXED for a given v
-   (eps halves every +50), so masks are nested: raising v only ever
-   ADDS lines, never removes or reshuffles them, and a brightness or
-   contrast change in one region cannot move lines in another. */
-function xdogMask(gray,w,h,v){
-  const r1=2, r2=3;
-  const b1=boxBlur(gray,w,h,r1), b2=boxBlur(gray,w,h,r2);
-  const n=w*h;
-  const eps=-Math.max(0.5, 2*Math.pow(2,(100-v)/50));
-  const m=new Uint8Array(n);
-  for(let i=0;i<n;i++) m[i]=(b1[i]-0.99*b2[i])<eps?1:0;
-  return m;
-}
-/* Binary dilation: expands ink regions. */
 function dilateMask(mask,w,h,r){
   r=Math.round(r); // integer radii only: fractional steps read off-grid pixels and collapse the mask
   if(r<=0) return mask;
@@ -545,10 +687,7 @@ function dilateMask(mask,w,h,r){
   }
   return out;
 }
-/* Morphological closing: dilation then erosion. Fills small gaps and breaks
-   in lines WITHOUT net thickening — fine lines stay fine, but sketchy broken
-   lines become solid and continuous. This is "solidify" that respects fine
-   line work. */
+
 function closeMask(mask,w,h,r){
   r=Math.round(r);
   if(r<=0) return mask;
@@ -560,27 +699,7 @@ function closeMask(mask,w,h,r){
   for(let i=0;i<n;i++) out[i]=e[i]?0:1;
   return out;
 }
-/* Soft-line discovery: a SEPARATE additive pass for faint boundaries
-   (white-to-lightblue, portrait shading). Finer scale, higher sensitivity,
-   lower noise floor. Computed independently and OR-ed onto the main line
-   work — it refines the result without touching it. */
-function xdogSoftMask(gray,w,h,v){
-  const r1=1, r2=2;
-  const b1=boxBlur(gray,w,h,r1), b2=boxBlur(gray,w,h,r2);
-  const n=w*h;
-  const eps=-Math.max(0.3, 1.2*Math.pow(2,(83-v)/50));
-  const m=new Uint8Array(n);
-  for(let i=0;i<n;i++) m[i]=(b1[i]-0.99*b2[i])<eps?1:0;
-  return m;
-}
 
-function invertMask(mask){
-  for(let i=0;i<mask.length;i++) mask[i]^=1;
-  return mask;
-}
-
-/* Connected-component labeling (4-connectivity) via union-find.
-   Returns {labels:Int32Array of compact ids, sizes:Array, count}. */
 function labelComponents(mask, w, h, value){
   const labels = new Int32Array(w*h).fill(-1);
   const parent = [0];
@@ -616,13 +735,6 @@ function labelComponents(mask, w, h, value){
   return {labels, sizes, count};
 }
 
-/* Despeckle: delete ink blobs smaller than minSize AND resolve paper
-   holes smaller than minSize. minSize is calibrated at ~300k pixels and
-   scaled by image area, so the slider behaves the same at any size.
-   Ring rule: a small hole wrapped ONLY in thin ink is a glow artifact
-   (the detector rings bright specks) — delete the ring, keep the hole.
-   A hole inside substantial ink (a letter counter) is filled instead.
-   minSize<=0 disables. */
 function despeckleMask(mask, w, h, minSize){
   if(minSize<=0) return mask;
   // normalize: minSize is calibrated at ~300k pixels (a typical phone
@@ -681,117 +793,7 @@ function despeckleMask(mask, w, h, minSize){
   return mask;
 }
 
-
-
-
-</script>
-
-<script>
-"use strict";
-/* =====================================================================
-   PART 2 — APP (DOM + wiring). Wrapped so the pure core above stays
-   testable in Node (no `document` there).
-   ===================================================================== */
-(function(){
-if(typeof document==="undefined") return;
-
-/* ---------- tiny helpers ---------- */
-function $(id){ return document.getElementById(id); }
-let statusTimer=null;
-function status(msg){
-  const el=$("status"); el.textContent=msg; el.classList.add("show");
-  clearTimeout(statusTimer);
-  statusTimer=setTimeout(function(){ el.classList.remove("show"); },2200);
-}
-function download(url, filename){
-  const a=document.createElement("a");
-  a.href=url; a.download=filename;
-  document.body.appendChild(a); a.click();
-  setTimeout(function(){ document.body.removeChild(a); },500);
-  /* NOTE for APK wrapper: Android WebView needs a DownloadListener for
-     <a download> to actually save the file. */
-}
-
-/* ---------- state ---------- */
-const MAXDIM=1800; // working size: at most 1800 px on the long side
-const S={
-  srcCanvas:null,   // downscaled source image (work size)
-  srcW:0, srcH:0,   // work size
-  origW:0, origH:0, // original file size (for the info line)
-  gray:null, grayDirty:true,
-  mask:null,            // single-tone mask (Threshold/Edge/Thin Line/Adaptive)
-  tone:null,            // Color Layers: per-pixel tone 0 dark / 1 mid / 2 light
-  cmpSplit:0.5,         // compare view split position (0..1 of width)
-  settings:{
-    /* stencilmaker.org, copied exactly: modes Threshold / Edge /
-       Thin Line / Adaptive / Color Layers; sliders 0-100 Threshold,
-       Detail, Line weight, Contrast, Shadow cleanup, Ink opacity
-       (20-100); switches Denoise, Close Gaps, Invert; ink color;
-       white background. Defaults = their Clean Outline preset. */
-    mode:"edge", threshold:54, detail:68, lineWeight:52, contrast:78, shadow:64,
-    denoise:true, closeGaps:true,
-    invert:false, opacity:100, ink:"#000000", whiteBg:false
-  },
-  view:"stencil"        // 'stencil' | 'compare' | 'original'
-};
-const Z={s:1,tx:0,ty:0}; // zoom/pan transform
-
-/* ---------- image loading ---------- */
-function loadFile(file){
-  if(!file || !file.type || file.type.indexOf("image/")!==0){
-    status("That doesn't look like an image file."); return;
-  }
-  const rd=new FileReader();
-  rd.onload=function(){
-    const img=new Image();
-    img.onload=function(){ setupImage(img, file.name); };
-    img.onerror=function(){ status("Couldn't read that image."); };
-    img.src=rd.result;
-  };
-  rd.onerror=function(){ status("Couldn't read that file."); };
-  rd.readAsDataURL(file);
-}
-
-function setupImage(img, name){
-  S.origW=img.naturalWidth||img.width; S.origH=img.naturalHeight||img.height;
-  let w=S.origW, h=S.origH;
-  const m=Math.max(w,h);
-  if(m>MAXDIM){ const k=MAXDIM/m; w=Math.round(w*k); h=Math.round(h*k); }
-  S.srcW=w; S.srcH=h;
-  const c=document.createElement("canvas"); c.width=w; c.height=h;
-  c.getContext("2d").drawImage(img,0,0,w,h);
-  S.srcCanvas=c;
-  S.grayDirty=true; S.view="stencil"; syncViewSeg();
-  $("imgInfo").textContent=(name?name+" · ":"")+
-    "Original "+S.origW+"×"+S.origH+
-    (m>MAXDIM?(" → working "+w+"×"+h+" (downscaled)"):"");
-  $("viewHint").style.display="none";
-  fitView(); process();
-  $("inputCard").classList.add("done");
-  status("Image loaded.");
-}
-
-/* ---------- plugin bridge: receive images from other shop-app plugins ----------
-   The shell routes messages via postMessage or a "plugin-message" CustomEvent.
-   Message format: {plugin:"stencil-lab", action:"load-image",
-                    image:"data:image/png;base64,…", meta:{source,prompt,seed}} */
-function handlePluginMessage(msg){
-  if(!msg||msg.plugin!=="stencil-lab") return;
-  if(msg.action==="load-image"&&msg.image){
-    const img=new Image();
-    img.onload=function(){
-      const label=(msg.meta&&msg.meta.source?msg.meta.source+" · ":"")+"AI design";
-      setupImage(img,label);
-      status("AI design received — dial in your stencil.");
-    };
-    img.onerror=function(){ status("Couldn't load the incoming image."); };
-    img.src=msg.image;
-  }
-}
-window.addEventListener("message",function(e){ handlePluginMessage(e.data); });
-window.addEventListener("plugin-message",function(e){ handlePluginMessage(e.detail); });
-
-/* ---------- processing pipeline ---------- */
+/* ================= pipeline (their pass order) ================= */
 function currentGray(){
   if(S.grayDirty||!S.gray){
     const st=S.settings;
@@ -803,12 +805,9 @@ function currentGray(){
       const f=1+st.contrast/100;
       for(let i=0;i<g.length;i++){ const v=Math.round(128+(g[i]-128)*f); g[i]=v<0?0:(v>255?255:v); }
     }
-    // pass order per the reference model: shadow cleanup first, then
-    // local contrast (Threshold mode), then the Detail pre-blur.
     if(st.shadow>0) g=shadowLift(g,S.srcW,S.srcH,st.shadow);
     if(st.mode==="threshold"&&st.contrast>0) g=localContrast(g,S.srcW,S.srcH,st.contrast);
-    // fractional pre-blur: blend the two nearest integer radii so the
-    // Detail slider moves smoothly instead of stepping at whole radii
+    // fractional pre-blur tied to Detail (lower Detail = stronger blur)
     const bf=((100-st.detail)/25)*(Math.min(S.srcW,S.srcH)/800);
     if(bf>0.05){
       const r0=Math.floor(bf), fr=bf-r0;
@@ -825,12 +824,22 @@ function currentGray(){
   }
   return S.gray;
 }
-
+function denoiseAbs(){
+  const st=S.settings;
+  const base=st.denoise?42:8;
+  return Math.max(2,Math.round(base*(1.15-st.detail/200)));
+}
+function lwRadius(){
+  const st=S.settings;
+  const scale=Math.min(S.srcW,S.srcH)/800;
+  if(st.mode==="edge"||st.mode==="thinline")
+    return Math.round((st.lineWeight/100)*2.5*scale);
+  if(st.lineWeight<=40) return 0;
+  return Math.round(((st.lineWeight-40)/60)*3*scale);
+}
 function buildMasks(){
   const st=S.settings, w=S.srcW, h=S.srcH, gray=currentGray();
   if(st.mode==="layers"){
-    // Color Layers: three tones; the Threshold slider places the bands
-    // (terciles shifted by the slider); Detail is ignored here.
     const c=toneCuts(gray), shift=(st.threshold-50)*1.2;
     let c1=Math.max(1,Math.min(253,Math.round(c.lo+shift)));
     let c2=Math.max(c1+1,Math.min(254,Math.round(c.hi+shift)));
@@ -843,33 +852,27 @@ function buildMasks(){
   let m;
   if(st.mode==="threshold"){
     m=thresholdMask(gray,w,h,cutLevel(gray,st.threshold));
-    // strong edges are traced too, so a pale subject keeps its outline
-    const edges=xdogMask(gray,w,h,170);
+    const edges=xdogMask(gray,w,h,170); // strong edges traced too
     for(let i=0;i<m.length;i++) m[i]|=edges[i];
   }else if(st.mode==="edge"||st.mode==="thinline"){
-    // Detail is the line finder sensitivity; Threshold only fills the
-    // darkest areas solid, and only above 35 (<=35 = pure lines).
     m = st.mode==="edge" ? xdogMask(gray,w,h,st.detail*1.6)
                          : xdogSoftMask(gray,w,h,st.detail*1.6);
     if(st.threshold>35){
       const fill=thresholdMask(gray,w,h,cutLevel(gray,st.threshold));
-      // a dark region running along the border counts as background
-      // and stays open — only enclosed dark areas fill solid
+      // dark regions touching the border count as background, stay open
       const FL=labelComponents(fill,w,h,1);
       const border=new Set();
       for(let x=0;x<w;x++){ border.add(FL.labels[x]); border.add(FL.labels[(h-1)*w+x]); }
       for(let y=0;y<h;y++){ border.add(FL.labels[y*w]); border.add(FL.labels[y*w+w-1]); }
       for(let i=0;i<m.length;i++) if(fill[i]&&!border.has(FL.labels[i])) m[i]|=1;
     }
-  }else{ // adaptive: Detail narrows the window, Threshold shifts the cut
+  }else{ // adaptive
     const win=Math.max(9,Math.round(autoWin(w,h)*(1.7-st.detail/100)));
     let k=detailK(st.detail)+(50-st.threshold)/250;
     k=Math.max(0.05,Math.min(0.6,k));
     m=sauvolaMask(gray,w,h,k,win);
   }
-  // tidy pass, in the reference order: denoise FIRST (so specks are
-  // never thickened into blots), then line weight, then close gaps,
-  // invert LAST of all.
+  // tidy pass: denoise FIRST, then line weight, then close gaps, invert LAST
   despeckleMask(m,w,h,denoiseAbs());
   const lwR=lwRadius();
   if(lwR>0) m=dilateMask(m,w,h,lwR);
@@ -877,28 +880,6 @@ function buildMasks(){
   if(st.invert) invertMask(m);
   S.mask=m;
 }
-/* Denoise strength in despeckleMask units (calibrated at 300k px):
-   the reference removes specks up to ~90 px on an 800px picture when
-   on, ~18 px when off; higher Detail shrinks the limit a little. */
-function denoiseAbs(){
-  const st=S.settings;
-  const base=st.denoise?42:8;
-  return Math.max(2,Math.round(base*(1.15-st.detail/200)));
-}
-/* Line weight -> dilation radius. In filled modes (Threshold,
-   Adaptive) nothing changes up to 40, then shapes grow; in the line
-   modes it sets stroke width directly. Scales with picture size. */
-function lwRadius(){
-  const st=S.settings;
-  const scale=Math.min(S.srcW,S.srcH)/800;
-  if(st.mode==="edge"||st.mode==="thinline")
-    return Math.round((st.lineWeight/100)*2.5*scale);
-  if(st.lineWeight<=40) return 0;
-  return Math.round(((st.lineWeight-40)/60)*3*scale);
-}
-
-function activeMask(){ return S.mask; }
-
 let scheduled=false;
 function schedule(){
   if(scheduled||!S.srcCanvas) return;
@@ -907,32 +888,24 @@ function schedule(){
 }
 function process(){
   if(!S.srcCanvas) return;
-  try{
-    buildMasks();
-    render();
-  }catch(err){ status("Processing hiccup — try lowering image size."); }
+  try{ buildMasks(); render(); }
+  catch(err){ status("Processing hiccup — try a smaller image."); }
 }
 
-/* ---------- rendering + zoom/pan ---------- */
-const view=$("view"), vctx=view.getContext("2d");
-const viewport=$("viewport");
-
+/* ================= styled output ================= */
 function inkRGB(){
   const hx=S.settings.ink;
   return [parseInt(hx.slice(1,3),16), parseInt(hx.slice(3,5),16), parseInt(hx.slice(5,7),16)];
 }
-/* The stencil as it is actually handed back: ink drawn in the chosen
-   color and opacity with a soft edge about a pixel wide (the mask's
-   hard edge blurred one step), composited on white when whiteBg or
-   forExportWhite, else on transparency. Color Layers renders its
-   three tones: dark = full ink, mid = ink at 45%, light = paper. */
+/* The stencil as handed back: ink in the chosen color/opacity with a
+   soft ~1px edge. white=true composites on white; false = transparency. */
 function styledCanvas(white){
   const w=S.srcW, h=S.srcH, st=S.settings;
-  const c=document.createElement("canvas"); c.width=w; c.height=h;
+  let c=document.createElement("canvas"); c.width=w; c.height=h;
   const ctx=c.getContext("2d");
   const id=ctx.createImageData(w,h), d=id.data;
   const rgb=inkRGB(), op=st.opacity/100;
-  let alpha; // per-pixel ink coverage 0..255 before opacity
+  let alpha;
   if(S.tone){
     alpha=new Uint8Array(w*h);
     for(let i=0;i<w*h;i++){
@@ -943,12 +916,12 @@ function styledCanvas(white){
     const m=S.mask; if(!m) return c;
     const mg=new Uint8Array(w*h);
     for(let i=0;i<w*h;i++) mg[i]=m[i]?255:0;
-    alpha=boxBlur(mg,w,h,1); // ~1px soft edge
+    alpha=boxBlur(mg,w,h,1);
   }
   for(let i=0,p=0;i<w*h;i++,p+=4){
     const a=(alpha[i]/255)*op;
     if(white){
-      d[p]  =Math.round(rgb[0]*a+255*(1-a));
+      d[p]=Math.round(rgb[0]*a+255*(1-a));
       d[p+1]=Math.round(rgb[1]*a+255*(1-a));
       d[p+2]=Math.round(rgb[2]*a+255*(1-a));
       d[p+3]=255;
@@ -958,18 +931,27 @@ function styledCanvas(white){
     }
   }
   ctx.putImageData(id,0,0);
+  if(st.mirror){
+    const f=document.createElement("canvas"); f.width=w; f.height=h;
+    const fx=f.getContext("2d");
+    fx.translate(w,0); fx.scale(-1,1); fx.drawImage(c,0,0);
+    c=f;
+  }
   return c;
 }
+
+/* ================= render / compare / zoom ================= */
+const view=$("view"), vctx=view.getContext("2d");
+const workspace=$("workspace"), pageWrap=$("pageWrap"), page=$("page");
 function render(){
   if(!S.srcCanvas) return;
   view.width=S.srcW; view.height=S.srcH;
-  if(S.view==="original"){
-    vctx.drawImage(S.srcCanvas,0,0);
-    return;
-  }
+  page.style.width=S.srcW+"px"; page.style.height=S.srcH+"px";
   if(!S.mask&&!S.tone) return;
-  vctx.drawImage(styledCanvas(true),0,0); // preview always on paper-white
-  if(S.view==="compare"){
+  const st=S.settings;
+  // stencil side (paper = white unless transparent bg chosen)
+  vctx.drawImage(styledCanvas(!st.transparent),0,0);
+  if(S.compare){
     const sx=Math.round(S.srcW*S.cmpSplit);
     if(sx>0){
       vctx.save();
@@ -977,274 +959,126 @@ function render(){
       vctx.drawImage(S.srcCanvas,0,0);
       vctx.restore();
     }
-    vctx.fillStyle="#ff9f1c";
-    vctx.fillRect(sx-1,0,2,S.srcH);
+    $("splitLine").style.display="block";
+    $("splitLine").style.left=(S.cmpSplit*100)+"%";
+    const hd=$("splitHandle");
+    hd.style.display="flex"; hd.style.left=(S.cmpSplit*100)+"%";
+    $("cmpPct").textContent=Math.round(S.cmpSplit*100)+"%";
+    $("cmpPill").classList.remove("hidden");
+  }else{
+    $("splitLine").style.display="none";
+    $("splitHandle").style.display="none";
+    $("cmpPill").classList.add("hidden");
   }
 }
-
 function applyT(){
-  view.style.transform="translate("+Z.tx+"px,"+Z.ty+"px) scale("+Z.s+")";
+  pageWrap.style.transform="translate("+Z.tx+"px,"+Z.ty+"px) scale("+Z.s+")";
+  $("zoomVal").textContent=Math.round(100*Z.s/Z.fit)+"%";
 }
 function fitView(){
   if(!S.srcCanvas) return;
-  const r=viewport.getBoundingClientRect();
-  Z.s=Math.min(r.width/S.srcW, r.height/S.srcH);
+  const r=workspace.getBoundingClientRect();
+  Z.fit=Math.min((r.width-28)/S.srcW,(r.height-28)/S.srcH);
+  Z.s=Z.fit;
   Z.tx=(r.width-S.srcW*Z.s)/2; Z.ty=(r.height-S.srcH*Z.s)/2;
   applyT();
 }
 function zoomAt(f,cx,cy){
-  const ns=Math.min(12,Math.max(0.1,Z.s*f));
+  const r=workspace.getBoundingClientRect();
+  const px=(cx===undefined? r.width/2 : cx-r.left), py=(cy===undefined? r.height/2 : cy-r.top);
+  const ns=Math.min(Z.fit*8,Math.max(Z.fit*0.2,Z.s*f));
   const k=ns/Z.s;
-  Z.tx=cx-(cx-Z.tx)*k; Z.ty=cy-(cy-Z.ty)*k; Z.s=ns;
+  Z.tx=px-(px-Z.tx)*k; Z.ty=py-(py-Z.ty)*k; Z.s=ns;
   applyT();
 }
-$("zoomIn").addEventListener("click",function(){
-  const r=viewport.getBoundingClientRect(); zoomAt(1.3,r.width/2,r.height/2);
-});
-$("zoomOut").addEventListener("click",function(){
-  const r=viewport.getBoundingClientRect(); zoomAt(1/1.3,r.width/2,r.height/2);
-});
+$("zoomIn").addEventListener("click",function(){ zoomAt(1.25); });
+$("zoomOut").addEventListener("click",function(){ zoomAt(0.8); });
 $("zoomFit").addEventListener("click",fitView);
+workspace.addEventListener("wheel",function(e){
+  if(!S.srcCanvas) return;
+  e.preventDefault();
+  zoomAt(e.deltaY<0?1.1:0.9, e.clientX, e.clientY);
+},{passive:false});
 
-/* pan (1 finger) + pinch (2 fingers), via pointer events */
-const ptrs=new Map(); let pinchD0=0;
-viewport.addEventListener("pointerdown",function(e){
-  viewport.setPointerCapture(e.pointerId);
+/* pointer: drag = compare split (compare on) or pan (off); pinch = zoom */
+const ptrs=new Map(); let prevPt=null, prevPinch=0;
+view.addEventListener("pointerdown",function(e){
+  view.setPointerCapture(e.pointerId);
+  ptrs.set(e.pointerId,{x:e.clientX,y:e.clientY});
+  prevPt={x:e.clientX,y:e.clientY};
+  if(ptrs.size===2){
+    const a=[...ptrs.values()];
+    prevPinch=Math.hypot(a[0].x-a[1].x,a[0].y-a[1].y);
+  }
+});
+view.addEventListener("pointermove",function(e){
+  if(!ptrs.has(e.pointerId)) return;
+  const old=ptrs.get(e.pointerId);
   ptrs.set(e.pointerId,{x:e.clientX,y:e.clientY});
   if(ptrs.size===2){
-    const p=[...ptrs.values()];
-    pinchD0=Math.hypot(p[0].x-p[1].x,p[0].y-p[1].y);
+    const a=[...ptrs.values()];
+    const d=Math.hypot(a[0].x-a[1].x,a[0].y-a[1].y);
+    if(prevPinch>0) zoomAt(d/prevPinch,(a[0].x+a[1].x)/2,(a[0].y+a[1].y)/2);
+    prevPinch=d;
+    Z.tx+=e.clientX-old.x; Z.ty+=e.clientY-old.y; applyT();
+    return;
   }
-});
-viewport.addEventListener("pointermove",function(e){
-  if(!ptrs.has(e.pointerId)) return;
-  const prev=ptrs.get(e.pointerId);
-  ptrs.set(e.pointerId,{x:e.clientX,y:e.clientY});
-  const r=viewport.getBoundingClientRect();
-  if(ptrs.size===1){
-    if(S.view==="compare"&&S.srcCanvas){
-      const fx=((e.clientX-r.left)-Z.tx)/(S.srcW*Z.s);
-      S.cmpSplit=Math.max(0.02,Math.min(0.98,fx));
-      render();
-    }else{
-      Z.tx+=e.clientX-prev.x; Z.ty+=e.clientY-prev.y; applyT();
-    }
-  }else if(ptrs.size===2){
-    const p=[...ptrs.values()];
-    const d=Math.hypot(p[0].x-p[1].x,p[0].y-p[1].y);
-    if(pinchD0>0&&d>0){
-      zoomAt(d/pinchD0,(p[0].x+p[1].x)/2-r.left,(p[0].y+p[1].y)/2-r.top);
-    }
-    pinchD0=d;
+  if(S.compare&&S.srcCanvas){
+    const r=page.getBoundingClientRect();
+    const fx=(e.clientX-r.left)/r.width;
+    S.cmpSplit=Math.max(0.02,Math.min(0.98,fx));
+    render();
+  }else if(prevPt){
+    Z.tx+=e.clientX-prevPt.x; Z.ty+=e.clientY-prevPt.y; applyT();
   }
+  prevPt={x:e.clientX,y:e.clientY};
 });
-function endPtr(e){ ptrs.delete(e.pointerId); pinchD0=0; }
-viewport.addEventListener("pointerup",endPtr);
-viewport.addEventListener("pointercancel",endPtr);
-viewport.addEventListener("wheel",function(e){
+function ptrUp(e){ ptrs.delete(e.pointerId); if(ptrs.size===0) prevPt=null; prevPinch=0; }
+view.addEventListener("pointerup",ptrUp);
+view.addEventListener("pointercancel",ptrUp);
+
+/* drag & drop anywhere */
+window.addEventListener("dragover",function(e){ e.preventDefault(); });
+window.addEventListener("drop",function(e){
   e.preventDefault();
-  const r=viewport.getBoundingClientRect();
-  zoomAt(e.deltaY<0?1.15:1/1.15,e.clientX-r.left,e.clientY-r.top);
-},{passive:false});
-window.addEventListener("resize",function(){ fitView(); });
+  if(e.dataTransfer.files&&e.dataTransfer.files[0]) loadFile(e.dataTransfer.files[0]);
+});
+window.addEventListener("resize",function(){ if(S.srcCanvas) fitView(); });
 
-/* ---------- sticky preview + collapsible loader ---------- */
-(function(){
-  const pc=$("previewCard");
-  function fitSticky(){
-    const h=document.querySelector(".topbar").offsetHeight||56;
-    pc.style.top=h+"px";
-  }
-  window.addEventListener("resize",fitSticky); fitSticky();
-  let tick=false;
-  function check(){
-    tick=false;
-    const top=parseFloat(pc.style.top)||0;
-    const r=pc.getBoundingClientRect();
-    pc.classList.toggle("stuck", window.scrollY>10 && r.top<=top+1);
-  }
-  window.addEventListener("scroll",function(){
-    if(!tick){ tick=true; requestAnimationFrame(check); }
-  },{passive:true});
-})();
-
-/* ---------- view toggle ---------- */
-function syncViewSeg(){
-  const btns=$("viewSeg").querySelectorAll("button");
-  btns.forEach(function(b){ b.classList.toggle("on",b.dataset.view===S.view); });
-}
-$("viewSeg").addEventListener("click",function(e){
-  const b=e.target.closest("button"); if(!b) return;
-  S.view=b.dataset.view; syncViewSeg(); render();
-});
-
-/* ---------- controls wiring ---------- */
-function bindSlider(id,valId,fmt,apply){
-  const s=$(id), v=$(valId);
-  function upd(){
-    const n=parseFloat(s.value); v.textContent=fmt(n); apply(n);
-  }
-  s.addEventListener("input",upd); upd();
-}
-/* ---------- dock: permanent sliders, one meaning each ----------
-   The stencilmaker.org model: no shared slider, no delta mappings,
-   no hidden controls. Presets are just visible slider positions. */
-function bindCtl(id, valId, apply){
-  const s=$(id), v=$(valId);
-  s.addEventListener("input",function(){
-    const n=parseFloat(s.value);
-    v.textContent=n; apply(n); schedule();
-  });
-}
-function grayCtl(id, valId, key){
-  bindCtl(id, valId, function(n){ S.settings[key]=n; S.grayDirty=true; });
-}
-grayCtl("sldThreshold","thresholdVal","threshold");
-grayCtl("sldDetail","detailVal","detail");
-bindCtl("sldLineWeight","lineWeightVal",function(n){ S.settings.lineWeight=n; });
-grayCtl("sldContrast","contrastVal","contrast");
-grayCtl("sldShadow","shadowVal","shadow");
-function syncCtlUI(){
-  const st=S.settings;
-  const pairs=[["sldThreshold","thresholdVal",st.threshold],
-    ["sldDetail","detailVal",st.detail],
-    ["sldLineWeight","lineWeightVal",st.lineWeight],
-    ["sldContrast","contrastVal",st.contrast],
-    ["sldShadow","shadowVal",st.shadow]];
-  pairs.forEach(function(p){ $(p[0]).value=p[2]; $(p[1]).textContent=p[2]; });
-  $("modeSeg").querySelectorAll("button").forEach(function(x){
-    x.classList.toggle("on",x.dataset.mode===st.mode);
-  });
-}
-/* Quick styles: the reference's published slider positions
-   (Threshold, Detail, Line weight, Contrast, Shadow cleanup). */
-const PRESETS={
-  bold:{mode:"threshold",threshold:66,detail:54,lineWeight:74,contrast:88,shadow:72},
-  clean:{mode:"edge",threshold:54,detail:68,lineWeight:52,contrast:78,shadow:64},
-  fine:{mode:"thinline",threshold:35,detail:78,lineWeight:36,contrast:72,shadow:58},
-  print:{mode:"threshold",threshold:62,detail:62,lineWeight:60,contrast:82,shadow:70}
-};
-function applyPreset(name){
-  const p=PRESETS[name]; if(!p) return;
-  const st=S.settings;
-  st.mode=p.mode; st.threshold=p.threshold; st.detail=p.detail;
-  st.lineWeight=p.lineWeight; st.contrast=p.contrast; st.shadow=p.shadow;
-  if(name==="print"&&!st.whiteBg){ st.whiteBg=true; syncToggleEl("tglWhiteBg",true); }
-  st.grayDirty=true;
-  $("presetRow").querySelectorAll("button").forEach(function(x){
-    x.classList.toggle("on",x.dataset.preset===name);
-  });
-  afterModeChange();
-}
-$("presetRow").addEventListener("click",function(e){
-  const b=e.target.closest("button"); if(!b) return;
-  applyPreset(b.dataset.preset);
-});
-function afterModeChange(){
-  syncCtlUI(); schedule();
-}
-$("modeSeg").addEventListener("click",function(e){
-  const b=e.target.closest("button"); if(!b) return;
-  S.settings.mode=b.dataset.mode;
-  S.grayDirty=true;
-  $("presetRow").querySelectorAll("button").forEach(function(x){ x.classList.remove("on"); });
-  afterModeChange();
-});
-syncCtlUI();
-/* Ink opacity + color + background: render-time settings (no reprocess,
-   just redraw), exactly as in the reference. */
-$("sldOpacity").addEventListener("input",function(){
-  S.settings.opacity=parseFloat($("sldOpacity").value);
-  $("opacityVal").textContent=$("sldOpacity").value;
-  render();
-});
-$("inkSeg").addEventListener("click",function(e){
-  const b=e.target.closest("button"); if(!b) return;
-  S.settings.ink=b.dataset.ink;
-  $("inkSeg").querySelectorAll("button").forEach(function(x){
-    x.classList.toggle("on",x===b);
-  });
-  render();
-});
-function syncToggleEl(id,v){
-  const el=$(id);
-  el.classList.toggle("on",v);
-  el.setAttribute("aria-pressed",String(v));
-}
-
-function bindToggle(id,get,set){
-  const el=$(id);
-  el.addEventListener("click",function(){
-    set(!get());
-    el.classList.toggle("on",get());
-    el.setAttribute("aria-pressed",String(get()));
-    schedule();
-  });
-}
-bindToggle("tglDenoise",
-  function(){return S.settings.denoise;},
-  function(v){S.settings.denoise=v;});
-bindToggle("tglCloseGaps",
-  function(){return S.settings.closeGaps;},
-  function(v){S.settings.closeGaps=v;});
-bindToggle("tglInvert",
-  function(){return S.settings.invert;},
-  function(v){
-    S.settings.invert=v;
-    // reference rule: switching Invert on turns the transparent
-    // background off (the export goes to white)
-    if(v && !S.settings.whiteBg){ S.settings.whiteBg=true; syncToggleEl("tglWhiteBg",true); }
-  });
-bindToggle("tglWhiteBg",
-  function(){return S.settings.whiteBg;},
-  function(v){S.settings.whiteBg=v; render();});
-
-
-/* ---------- input wiring ---------- */
-$("fileInput").addEventListener("change",function(e){
-  if(e.target.files[0]) loadFile(e.target.files[0]); e.target.value="";
-});
-$("camInput").addEventListener("change",function(e){
-  if(e.target.files[0]) loadFile(e.target.files[0]); e.target.value="";
-});
-const dz=$("dropZone");
-["dragenter","dragover"].forEach(function(ev){
-  dz.addEventListener(ev,function(e){ e.preventDefault(); dz.classList.add("over"); });
-});
-["dragleave","drop"].forEach(function(ev){
-  dz.addEventListener(ev,function(e){ e.preventDefault(); dz.classList.remove("over"); });
-});
-dz.addEventListener("drop",function(e){
-  const f=e.dataTransfer&&e.dataTransfer.files&&e.dataTransfer.files[0];
-  if(f) loadFile(f);
-});
-
-/* ---------- export ---------- */
+/* ================= export ================= */
+const PAPER={ letter:{w:612,h:792,dpiW:2550,dpiH:3300,label:"Letter"},
+              a4:{w:595,h:842,dpiW:2480,dpiH:3508,label:"A4"} };
 function needImage(){
   if(!S.srcCanvas||(!S.mask&&!S.tone)){ status("Load an image first."); return false; }
   return true;
 }
-$("btnPng").addEventListener("click",function(){
-  if(!needImage()) return;
-  download(styledCanvas(S.settings.whiteBg).toDataURL("image/png"),"stencil.png");
-  status("PNG exported.");
-});
-/* Minimal one-page PDF: the stencil as a high-quality JPEG centered
-   on US Letter within a half-inch border (their PDF spec). */
+/* PNG at the selected paper size, 300 DPI, half-inch (150px) margin. */
+function paperPng(){
+  const P=PAPER[S.settings.pageSize];
+  const c=document.createElement("canvas"); c.width=P.dpiW; c.height=P.dpiH;
+  const ctx=c.getContext("2d");
+  if(!S.settings.transparent){ ctx.fillStyle="#ffffff"; ctx.fillRect(0,0,c.width,c.height); }
+  const st=styledCanvas(false);
+  const M=150;
+  const sc=Math.min((c.width-2*M)/S.srcW,(c.height-2*M)/S.srcH);
+  const dw=S.srcW*sc, dh=S.srcH*sc;
+  ctx.imageSmoothingEnabled=true;
+  ctx.drawImage(st,(c.width-dw)/2,(c.height-dh)/2,dw,dh);
+  return c;
+}
 function makePdf(){
+  const P=PAPER[S.settings.pageSize];
   const c=styledCanvas(true);
   const dataUrl=c.toDataURL("image/jpeg",0.92);
   const bin=atob(dataUrl.slice(dataUrl.indexOf(",")+1));
   const jpg=new Uint8Array(bin.length);
   for(let i=0;i<bin.length;i++) jpg[i]=bin.charCodeAt(i);
-  const PW=612, PH=792, M=36;
-  const iw=S.srcW, ih=S.srcH;
-  const sc=Math.min((PW-2*M)/iw,(PH-2*M)/ih);
-  const dw=iw*sc, dh=ih*sc, dx=(PW-dw)/2, dy=(PH-dh)/2;
+  const M=36, PW=P.w, PH=P.h;
+  const sc=Math.min((PW-2*M)/S.srcW,(PH-2*M)/S.srcH);
+  const dw=S.srcW*sc, dh=S.srcH*sc, dx=(PW-dw)/2, dy=(PH-dh)/2;
   const content="q "+dw.toFixed(2)+" 0 0 "+dh.toFixed(2)+" "+dx.toFixed(2)+" "+dy.toFixed(2)+" cm /Im0 Do Q";
   const enc=new TextEncoder();
-  const parts=[]; let len=0;
-  const offsets=[0];
+  const parts=[]; let len=0; const offsets=[0];
   function pushStr(x){ const b=enc.encode(x); parts.push(b); len+=b.length; }
   function pushRaw(b){ parts.push(b); len+=b.length; }
   pushStr("%PDF-1.4\n");
@@ -1255,7 +1089,7 @@ function makePdf(){
   offsets.push(len);
   pushStr("3 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 "+PW+" "+PH+"] /Resources << /XObject << /Im0 4 0 R >> >> /Contents 5 0 R >>\nendobj\n");
   offsets.push(len);
-  pushStr("4 0 obj\n<< /Type /XObject /Subtype /Image /Width "+iw+" /Height "+ih+" /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length "+jpg.length+" >>\nstream\n");
+  pushStr("4 0 obj\n<< /Type /XObject /Subtype /Image /Width "+S.srcW+" /Height "+S.srcH+" /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length "+jpg.length+" >>\nstream\n");
   pushRaw(jpg);
   pushStr("\nendstream\nendobj\n");
   offsets.push(len);
@@ -1266,17 +1100,226 @@ function makePdf(){
   pushStr(xref+"trailer\n<< /Size 6 /Root 1 0 R >>\nstartxref\n"+xrefPos+"\n%%EOF");
   return new Blob(parts,{type:"application/pdf"});
 }
-$("btnPdf").addEventListener("click",function(){
+$("btnDownload").addEventListener("click",function(){
   if(!needImage()) return;
-  const url=URL.createObjectURL(makePdf());
-  download(url,"stencil.pdf");
-  setTimeout(function(){ URL.revokeObjectURL(url); },4000);
-  status("PDF exported.");
+  if(S.fmt==="png"){
+    download(paperPng().toDataURL("image/png"),"stencil.png");
+    status("PNG exported ("+PAPER[S.settings.pageSize].label+", 300 DPI).");
+  }else{
+    const url=URL.createObjectURL(makePdf());
+    download(url,"stencil.pdf");
+    setTimeout(function(){ URL.revokeObjectURL(url); },4000);
+    status("PDF exported ("+PAPER[S.settings.pageSize].label+").");
+  }
 });
 
-/* init */
-view.width=16; view.height=16; // placeholder until an image loads
+/* ================= wiring ================= */
+function paintSlider(el){
+  const p=(el.value-el.min)/(el.max-el.min)*100;
+  el.style.setProperty("--track","linear-gradient(to right, var(--violet) "+p+"%, #e5e7eb "+p+"%)");
+}
+function setStyleName(n){
+  S.styleName=n;
+  $("styleName").textContent=n;
+  $("presetGrid").querySelectorAll("button").forEach(function(b){
+    b.classList.toggle("on",b.textContent.replace(/\s+/g," ").trim()===n);
+  });
+  syncModePill();
+}
+function syncModePill(){
+  const names={threshold:"Threshold",edge:"Edge",thinline:"Thin Line",adaptive:"Adaptive",layers:"Color Layers"};
+  $("modePill").textContent=names[S.settings.mode];
+  $("pillMode").innerHTML=names[S.settings.mode]+" / <b>"+S.styleName+"</b>";
+}
+function markCustom(){ if(S.styleName!=="Custom") setStyleName("Custom"); }
+function bindSlider(id,valId,key,isGray){
+  const el=$(id);
+  paintSlider(el);
+  el.addEventListener("input",function(){
+    const n=parseFloat(el.value);
+    $(valId).textContent=n+"%";
+    paintSlider(el);
+    S.settings[key]=n;
+    markCustom();
+    if(isGray){ S.grayDirty=true; schedule(); }
+    else if(key==="opacity"){ render(); }
+    else schedule();
+  });
+}
+bindSlider("sldThreshold","thresholdVal","threshold",true);
+bindSlider("sldLineWeight","lineWeightVal","lineWeight",false);
+bindSlider("sldContrast","contrastVal","contrast",true);
+bindSlider("sldDetail","detailVal","detail",true);
+bindSlider("sldShadow","shadowVal","shadow",true);
+bindSlider("sldOpacity","opacityVal","opacity",false);
+function syncSliders(){
+  const st=S.settings;
+  const pairs=[["sldThreshold","thresholdVal",st.threshold],["sldLineWeight","lineWeightVal",st.lineWeight],
+    ["sldContrast","contrastVal",st.contrast],["sldDetail","detailVal",st.detail],
+    ["sldShadow","shadowVal",st.shadow],["sldOpacity","opacityVal",st.opacity]];
+  pairs.forEach(function(p){
+    const el=$(p[0]); el.value=p[2]; $(p[1]).textContent=p[2]+"%"; paintSlider(el);
+  });
+  $("modeSeg").querySelectorAll("button").forEach(function(b){
+    b.classList.toggle("on",b.dataset.mode===st.mode);
+  });
+  syncModePill();
+}
+/* presets: their published slider positions */
+const PRESETS={
+  bold:{mode:"threshold",threshold:66,detail:54,lineWeight:74,contrast:88,shadow:72,name:"Bold Cut"},
+  clean:{mode:"edge",threshold:54,detail:68,lineWeight:52,contrast:78,shadow:64,name:"Clean Outline"},
+  fine:{mode:"thinline",threshold:35,detail:78,lineWeight:36,contrast:72,shadow:58,name:"Fine Line"},
+  print:{mode:"threshold",threshold:62,detail:62,lineWeight:60,contrast:82,shadow:70,name:"Print Ready"}
+};
+function applyPreset(name){
+  const p=PRESETS[name]; if(!p) return;
+  const st=S.settings;
+  st.mode=p.mode; st.threshold=p.threshold; st.detail=p.detail;
+  st.lineWeight=p.lineWeight; st.contrast=p.contrast; st.shadow=p.shadow;
+  if(name==="print"&&st.transparent) setTransparent(false); // Print Ready -> white bg
+  S.grayDirty=true;
+  setStyleName(p.name);
+  syncSliders(); schedule();
+}
+$("presetGrid").addEventListener("click",function(e){
+  const b=e.target.closest("button"); if(!b) return;
+  applyPreset(b.dataset.preset);
+});
+$("modeSeg").addEventListener("click",function(e){
+  const b=e.target.closest("button"); if(!b) return;
+  S.settings.mode=b.dataset.mode;
+  S.grayDirty=true;
+  markCustom(); syncSliders(); schedule();
+});
+$("moreBtn").addEventListener("click",function(){
+  $("moreWrap").classList.toggle("hidden");
+});
+/* cleanup tools + rail sync */
+function setPressed(id,v){ $(id).classList.toggle("on",v); }
+function setDenoise(v){
+  S.settings.denoise=v;
+  setPressed("btnDenoise",v); setPressed("rlDenoise",v); schedule();
+}
+function setCloseGaps(v){
+  S.settings.closeGaps=v;
+  setPressed("btnCloseGaps",v); setPressed("rlCloseGaps",v); schedule();
+}
+function setInvert(v){
+  S.settings.invert=v;
+  setPressed("btnInvert",v); setPressed("rlInvert",v);
+  // their rule: switching Invert on turns the transparent background off
+  if(v&&S.settings.transparent) setTransparent(false);
+  schedule();
+}
+$("btnDenoise").addEventListener("click",function(){ setDenoise(!S.settings.denoise); });
+$("rlDenoise").addEventListener("click",function(){ setDenoise(!S.settings.denoise); });
+$("btnCloseGaps").addEventListener("click",function(){ setCloseGaps(!S.settings.closeGaps); });
+$("rlCloseGaps").addEventListener("click",function(){ setCloseGaps(!S.settings.closeGaps); });
+$("btnInvert").addEventListener("click",function(){ setInvert(!S.settings.invert); });
+$("rlInvert").addEventListener("click",function(){ setInvert(!S.settings.invert); });
+$("btnRotate").addEventListener("click",rotateSrc);
+$("rlRotate").addEventListener("click",rotateSrc);
+function setMirror(v){
+  S.settings.mirror=v;
+  setPressed("rlMirror",v);
+  const t=$("tglMirror");
+  t.classList.toggle("on",v);
+  t.querySelector(".st").textContent=v?"On":"Off";
+  render();
+}
+$("tglMirror").addEventListener("click",function(){ setMirror(!S.settings.mirror); });
+$("rlMirror").addEventListener("click",function(){ setMirror(!S.settings.mirror); });
+function setTransparent(v){
+  S.settings.transparent=v;
+  setPressed("rlBackground",v);
+  const t=$("tglTransparent");
+  t.classList.toggle("on",v);
+  t.querySelector(".st").textContent=v?"On":"Off";
+  render();
+}
+$("tglTransparent").addEventListener("click",function(){ setTransparent(!S.settings.transparent); });
+$("rlBackground").addEventListener("click",function(){ setTransparent(!S.settings.transparent); });
+$("rlCompare").addEventListener("click",function(){
+  S.compare=!S.compare;
+  setPressed("rlCompare",S.compare);
+  render();
+});
+$("rlFit").addEventListener("click",fitView);
+$("inkSeg").addEventListener("click",function(e){
+  const b=e.target.closest("button"); if(!b) return;
+  S.settings.ink=b.dataset.ink;
+  $("inkName").textContent=b.dataset.name;
+  $("inkSeg").querySelectorAll("button").forEach(function(x){ x.classList.toggle("on",x===b); });
+  render();
+});
+$("pageSeg").addEventListener("click",function(e){
+  const b=e.target.closest("button"); if(!b) return;
+  S.settings.pageSize=b.dataset.page;
+  $("pageSeg").querySelectorAll("button").forEach(function(x){ x.classList.toggle("on",x===b); });
+  const lbl=PAPER[S.settings.pageSize].label;
+  $("pdfSizeLbl").textContent=lbl;
+  $("pngNote").textContent="PNG export uses the selected paper size ("+lbl+") at 300 DPI, with a half-inch margin.";
+});
+function resetAll(){
+  S.settings=Object.assign({},DEFAULTS);
+  if(S.origCanvas){ // restore the un-rotated source
+    S.srcCanvas=S.origCanvas; S.srcW=S.origCanvas.width; S.srcH=S.origCanvas.height;
+  }
+  S.rot=0; S.grayDirty=true;
+  $("btnRotate").innerHTML="Rotate 0&deg;";
+  if(S.srcCanvas) fitView();
+  setDenoise(true); setCloseGaps(false);
+  setPressed("btnInvert",false); setPressed("rlInvert",false);
+  setMirror(false); setTransparent(true);
+  setStyleName("Clean Outline");
+  syncSliders(); schedule();
+  status("Settings reset to Clean Outline defaults.");
+}
+$("resetBtn").addEventListener("click",resetAll);
+$("rlReset").addEventListener("click",resetAll);
+/* tabs */
+function showTab(name){
+  $("tabs").querySelectorAll("button").forEach(function(b){
+    b.classList.toggle("on",b.dataset.tab===name);
+  });
+  ["adjust","ai","export"].forEach(function(t){
+    $("tab-"+t).classList.toggle("hidden",t!==name);
+  });
+}
+$("tabs").addEventListener("click",function(e){
+  const b=e.target.closest("button"); if(!b) return;
+  showTab(b.dataset.tab);
+});
+$("btnExportTop").addEventListener("click",function(){ showTab("export"); });
+document.querySelectorAll(".fmtcard").forEach(function(card){
+  card.addEventListener("click",function(){
+    S.fmt=card.dataset.fmt;
+    document.querySelectorAll(".fmtcard").forEach(function(x){ x.classList.toggle("on",x===card); });
+    $("btnDownload").textContent=S.fmt==="png"?"Download PNG":"Download PDF";
+  });
+});
+/* file inputs */
+$("fileInput").addEventListener("change",function(e){
+  if(e.target.files[0]) loadFile(e.target.files[0]); e.target.value="";
+});
+$("camInput").addEventListener("change",function(e){
+  if(e.target.files[0]) loadFile(e.target.files[0]); e.target.value="";
+});
+function openFile(){ $("fileInput").click(); }
+$("btnChoose").addEventListener("click",openFile);
+$("btnReplace").addEventListener("click",openFile);
+$("btnUploadTop").addEventListener("click",openFile);
+$("btnCamera").addEventListener("click",function(){ $("camInput").click(); });
 
+/* init */
+syncSliders();
+setCloseGaps(false);
+(function(){
+  const r=workspace.getBoundingClientRect();
+  const w=Math.max(240,Math.min(560,r.width-28)), h=Math.max(200,Math.min(420,r.height-28));
+  page.style.width=w+"px"; page.style.height=h+"px";
+  Z.fit=1; Z.s=1; Z.tx=(r.width-w)/2; Z.ty=(r.height-h)/2; applyT();
 })();
 </script>
 </body>
