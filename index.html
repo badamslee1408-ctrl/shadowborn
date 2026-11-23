@@ -1,3 +1,8 @@
+<!--
+  Stencil Lab (Shadowborn) v2.0 — Tattoo Shop Plugin
+  Copyright (c) 2026 Brandon L. Adams <b.adams.lee1408@gmail.com>
+  Proprietary. All rights reserved.
+-->
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -799,6 +804,26 @@ function setupImage(img, name){
   $("inputCard").classList.add("done");
   status("Image loaded.");
 }
+
+/* ---------- plugin bridge: receive images from other shop-app plugins ----------
+   The shell routes messages via postMessage or a "plugin-message" CustomEvent.
+   Message format: {plugin:"stencil-lab", action:"load-image",
+                    image:"data:image/png;base64,…", meta:{source,prompt,seed}} */
+function handlePluginMessage(msg){
+  if(!msg||msg.plugin!=="stencil-lab") return;
+  if(msg.action==="load-image"&&msg.image){
+    const img=new Image();
+    img.onload=function(){
+      const label=(msg.meta&&msg.meta.source?msg.meta.source+" · ":"")+"AI design";
+      setupImage(img,label);
+      status("AI design received — dial in your stencil.");
+    };
+    img.onerror=function(){ status("Couldn't load the incoming image."); };
+    img.src=msg.image;
+  }
+}
+window.addEventListener("message",function(e){ handlePluginMessage(e.data); });
+window.addEventListener("plugin-message",function(e){ handlePluginMessage(e.detail); });
 
 /* ---------- processing pipeline ---------- */
 function currentGray(){
