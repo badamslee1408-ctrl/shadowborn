@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Shadowborn — Create a Stencil Online</title>
 <!--
-  Shadowborn Stencil Maker v6.0 — exact editor clone
+  Shadowborn Stencil Maker v6.1 — exact editor clone
   Editor layout and control model follow stencilmaker.org's editor:
   header + left tool rail + compare canvas + right control panel.
   Engine (XDoG / Sauvola / tone bands) is our own code, on-device only.
@@ -859,6 +859,12 @@ function currentGray(){
     }
     if(st.shadow>0) g=shadowLift(g,S.srcW,S.srcH,st.shadow);
     if(st.mode==="threshold"&&st.contrast>0) g=localContrast(g,S.srcW,S.srcH,st.contrast);
+    // line modes: the reference says Contrast "barely affects" them —
+    // a weak version of the same local contrast, so the slider is not
+    // dead there (at a fixed Contrast it cannot disturb Detail's
+    // add-only guarantee, which is measured per-slider)
+    if((st.mode==="edge"||st.mode==="thinline")&&st.contrast>0)
+      g=localContrast(g,S.srcW,S.srcH,st.contrast*0.35);
     // Pre-blur. In the LINE modes (Edge / Thin Line) the blur is FIXED:
     // Detail there is purely the line finder's sensitivity, so raising
     // it can only ever add lines, never move or remove them. In the
@@ -889,13 +895,34 @@ function denoiseAbs(){
   if(st.mode==="edge"||st.mode==="thinline") return base;
   return Math.max(2,Math.round(base*(1.15-st.detail/200)));
 }
-function lwRadius(){
+/* Line weight -> dilation amount (fractional). Integer radii alone
+   made the slider dead on small images (radius rounded to 1 across
+   most of the range); the fractional part grows ink by including
+   pixels whose neighbourhood is at least (1-frac) full — smooth and
+   inclusion-monotone. Filled modes: nothing up to 40, then shapes
+   grow. Scales with picture size. */
+function lwAmount(){
   const st=S.settings;
   const scale=Math.min(S.srcW,S.srcH)/800;
   if(st.mode==="edge"||st.mode==="thinline")
-    return Math.round((st.lineWeight/100)*2.5*scale);
+    return (st.lineWeight/100)*2.5*scale;
   if(st.lineWeight<=40) return 0;
-  return Math.round(((st.lineWeight-40)/60)*3*scale);
+  return ((st.lineWeight-40)/60)*3*scale;
+}
+function dilateFractional(mask,w,h,r){
+  const r0=Math.floor(r), fr=r-r0;
+  let m=mask;
+  if(r0>0) m=dilateMask(m,w,h,r0);
+  if(fr>0.02){
+    const mg=new Uint8Array(w*h);
+    for(let i=0;i<w*h;i++) mg[i]=m[i]?255:0;
+    const b=boxBlur(mg,w,h,1);
+    const thr=Math.round((1-fr)*255);
+    const out=new Uint8Array(m);
+    for(let i=0;i<w*h;i++) if(b[i]>=thr) out[i]=1;
+    m=out;
+  }
+  return m;
 }
 function buildMasks(){
   const st=S.settings, w=S.srcW, h=S.srcH, gray=currentGray();
@@ -941,8 +968,8 @@ function buildMasks(){
   // tidy pass: denoise FIRST, then line weight, then close gaps, invert LAST
   if(st.mode==="edge"||st.mode==="thinline") denoiseLineMask(m,w,h,denoiseAbs());
   else despeckleMask(m,w,h,denoiseAbs());
-  const lwR=lwRadius();
-  if(lwR>0) m=dilateMask(m,w,h,lwR);
+  const lwA=lwAmount();
+  if(lwA>0) m=dilateFractional(m,w,h,lwA);
   if(st.closeGaps) m=closeMask(m,w,h,Math.max(1,Math.round(1.5*Math.min(w,h)/800)));
   if(st.invert) invertMask(m);
   S.mask=m;
