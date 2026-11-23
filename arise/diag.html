@@ -496,6 +496,8 @@
       <button id="galDel" class="ghost" style="color:#f87171;border-color:rgba(248,113,113,.55)">Delete</button>
       <button id="galClose" class="ghost">Close</button>
     </div>
+  </div>
+</div>
 
 <!-- New Appointment modal -->
 <div id="apptModal" class="modal">
@@ -758,16 +760,7 @@ function spawn(init){
   };
 }
 for (let i=0;i<110;i++) parts.push(spawn(true));
-let lastEmber=0;
-(function tick(now){
-  requestAnimationFrame(tick);
-  /* The background is pure decoration: never let it compete with the
-     person using the app. Pause while a modal covers it (invisible
-     anyway) or the tab is hidden, and run at ~30fps. The glow is two
-     plain arcs — shadowBlur per particle was the expensive part. */
-  if(document.hidden || document.querySelector('.modal.open')) return;
-  if(now-lastEmber<33) return;
-  lastEmber=now;
+(function tick(){
   ctx.clearRect(0,0,W,H);
   for (let i=0;i<parts.length;i++){
     const p = parts[i];
@@ -776,16 +769,15 @@ let lastEmber=0;
     else {
       const fade = Math.min(1, (p.max-p.life)/80, p.life/40);
       ctx.beginPath();
-      ctx.arc(p.x, p.y, p.r*2.6, 0, 7);
-      ctx.fillStyle = `hsla(${p.hue},85%,60%,${(p.a*fade*.15).toFixed(3)})`;
-      ctx.fill();
-      ctx.beginPath();
       ctx.arc(p.x, p.y, p.r, 0, 7);
       ctx.fillStyle = `hsla(${p.hue},85%,65%,${(p.a*fade).toFixed(3)})`;
-      ctx.fill();
+      ctx.shadowColor = `hsla(${p.hue},90%,60%,.8)`;
+      ctx.shadowBlur = 12;
+      ctx.fill(); ctx.shadowBlur = 0;
     }
   }
-})(performance.now());
+  requestAnimationFrame(tick);
+})();
 
 /* ---- tabs (home hub) ---- */
 function goTab(id){
@@ -2166,10 +2158,6 @@ function initSmoke(canvas){
   const W = w, H = h;
   const EYES = [[0.467,0.320],[0.533,0.317]].map(e=>[(e[0]+0.25)/1.5*W, (e[1]+0.25)/1.5*H]);
   (function tick(now){
-    requestAnimationFrame(tick);
-    if(document.hidden || document.querySelector('.modal.open')) return;
-    if(now-(canvas._lt||0)<33) return;
-    canvas._lt=now;
     const t = now/1000;
     ctx.clearRect(0,0,W,H);
     ctx.globalCompositeOperation = 'lighter';
@@ -2184,6 +2172,7 @@ function initSmoke(canvas){
       ctx.fillStyle = g;
       ctx.beginPath(); ctx.arc(e[0],e[1],er,0,7); ctx.fill();
     }
+    requestAnimationFrame(tick);
   })(performance.now());
 }
 initSmoke(document.querySelector('.logo-wrap canvas.smoke'));
@@ -2191,37 +2180,5 @@ initSmoke(document.querySelector('.logo-wrap canvas.smoke'));
 /* ---- init ---- */
 renderCal(); renderApptList(); renderToday(); renderClients();
 </script>
-
-<!-- DIAGNOSTIC v22 (test copy only) -->
-<div id="dbg" style="position:fixed;left:0;right:0;bottom:0;z-index:2000;background:rgba(0,0,0,.92);color:#4ade80;font:11px/1.5 monospace;padding:6px 8px;pointer-events:none;white-space:pre-wrap;max-height:46vh;overflow:hidden">DBG v22 boot</div>
-<script>
-(function(){
-  var box=null, lines=[];
-  function log(m){ try{ if(!box) box=document.getElementById('dbg'); var t=new Date(); var s=('0'+t.getMinutes()).slice(-2)+':'+('0'+t.getSeconds()).slice(-2)+'.'+('00'+t.getMilliseconds()).slice(-3)+' '+m; lines.push(s); if(lines.length>14) lines.shift(); if(box) box.textContent=lines.join('\n'); }catch(e){} }
-  window.__dbg=log;
-  window.addEventListener('error',function(e){ log('ERROR: '+(e.message||e.type)); },true);
-  document.addEventListener('click',function(e){ var el=e.target; var top=document.elementFromPoint(e.clientX,e.clientY);
-    log('tap-> '+(el.tagName||'?')+'.'+(el.className||'')+'#'+(el.id||'')+' txt="'+(el.textContent||'').trim().slice(0,14)+'" | top='+(top?(top.tagName+'.'+(top.className||'')+'#'+(top.id||'')):'?')); },true);
-  log('readyState='+document.readyState+' loader='+(!!document.getElementById('loader')));
-  document.addEventListener('DOMContentLoaded',function(){ log('DOMContentLoaded'); });
-  window.addEventListener('load',function(){ log('window load, loader='+(!!document.getElementById('loader'))); });
-  // wrap the day opener once it exists
-  var tries=0; var iv=setInterval(function(){ tries++;
-    if(typeof window.openDayDetail==='function' && !window.openDayDetail.__wrapped){
-      var orig=window.openDayDetail;
-      window.openDayDetail=function(ds){ log('openDayDetail('+ds+') ENTER'); var r=orig.apply(this,arguments);
-        var m=document.getElementById('dayModal'); log('openDayDetail EXIT class=['+(m?m.className:'NO EL')+'] disp='+(m?getComputedStyle(m).display:'?'));
-        setTimeout(function(){ var m2=document.getElementById('dayModal'); log('dayModal @+600ms class=['+(m2?m2.className:'?')+'] disp='+(m2?getComputedStyle(m2).display:'?')); },600);
-        return r; };
-      window.openDayDetail.__wrapped=true; log('openDayDetail wrapped');
-    }
-    var b=document.getElementById('newApptBtn');
-    if(b && !b.__dbg){ b.__dbg=true; b.addEventListener('click',function(){ log('newApptBtn handler-side listener fired');
-      setTimeout(function(){ var m=document.getElementById('apptModal'); log('apptModal @+300ms class=['+(m?m.className:'?')+'] disp='+(m?getComputedStyle(m).display:'?')); },300); }); }
-    if(tries>40) clearInterval(iv);
-  },250);
-})();
-</script>
-
 </body>
 </html>
