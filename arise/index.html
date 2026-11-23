@@ -254,7 +254,7 @@
    safety fade guarantees the app is never trapped behind it. */
 #loader{position:fixed; inset:0; z-index:999; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:22px;
   background:radial-gradient(ellipse 70% 55% at 50% 42%, rgba(37,58,138,.35), transparent 70%), #06060f;
-  transition:opacity .6s ease; animation:ldSafety .8s ease 6s forwards;}
+  transition:opacity .6s ease; animation:ldSafety .8s ease 6s forwards; touch-action:none;}
 #loader.done{opacity:0; pointer-events:none;}
 @keyframes ldSafety{to{opacity:0; visibility:hidden;}}
 .ld-ring{position:relative; width:290px; height:290px; flex:0 0 auto;}
@@ -282,6 +282,13 @@
   var N=14, lit=0, start=Date.now(), flames=[];
   var ring=document.getElementById('ldRing');
   window.addEventListener('DOMContentLoaded',function(){ var hd=document.getElementById('hdrLogo'); if(hd) document.getElementById('ldLogo').src=hd.src; });
+  /* No tapping past it: the loader swallows every tap and touch,
+     and the app behind it cannot scroll until it lifts. */
+  var L0=document.getElementById('loader');
+  ['click','touchstart','touchend','pointerdown'].forEach(function(ev){
+    L0.addEventListener(ev,function(e){ e.preventDefault(); e.stopPropagation(); },{passive:false});
+  });
+  document.body.style.overflow='hidden';
   var defs='<defs><linearGradient id="ldg" x1="0" y1="1" x2="0" y2="0"><stop offset="0" stop-color="#e0f2fe"/><stop offset=".45" stop-color="#38bdf8"/><stop offset="1" stop-color="#2563eb"/></linearGradient></defs>';
   var body='<path d="M10 1 C13 7 18 11 18 18 a8 9 0 1 1 -16 0 C2 11 7 7 10 1 Z" fill="url(#ldg)"/><path d="M10 12 C11.6 15 13.5 16.8 13.5 20 a3.5 4 0 1 1 -7 0 C6.5 16.8 8.4 15 10 12 Z" fill="#f0f9ff" opacity=".92"/>';
   for(var i=0;i<N;i++){
@@ -295,17 +302,23 @@
   function lightTo(n){ while(lit<n&&lit<N){ flames[lit].classList.add('lit'); lit++; } }
   var timer=setInterval(function(){
     var done=document.readyState==='complete';
-    var target=done?N:Math.min(N-1, 2+Math.floor((Date.now()-start)/170));
+    var target=done?N:Math.min(N-1, 2+Math.floor((Date.now()-start)/300));
     lightTo(target);
     if(lit>=N){
       clearInterval(timer);
-      var hold=Math.max(0,1600-(Date.now()-start));
+      var hold=Math.max(0,3400-(Date.now()-start));
       setTimeout(function(){
         var L=document.getElementById('loader');
-        if(L){ L.classList.add('done'); setTimeout(function(){ if(L.parentNode) L.parentNode.removeChild(L); },700); }
+        if(L){ L.classList.add('done'); document.body.style.overflow=''; setTimeout(function(){ if(L.parentNode) L.parentNode.removeChild(L); },700); }
       }, hold+300);
     }
   },110);
+  /* Belt-and-braces cleanup matching the CSS safety fade. */
+  setTimeout(function(){
+    var L2=document.getElementById('loader');
+    if(L2&&L2.parentNode) L2.parentNode.removeChild(L2);
+    document.body.style.overflow='';
+  },6500);
 })();
 </script>
 
