@@ -758,7 +758,16 @@ function spawn(init){
   };
 }
 for (let i=0;i<110;i++) parts.push(spawn(true));
-(function tick(){
+let lastEmber=0;
+(function tick(now){
+  requestAnimationFrame(tick);
+  /* The background is pure decoration: never let it compete with the
+     person using the app. Pause while a modal covers it (invisible
+     anyway) or the tab is hidden, and run at ~30fps. The glow is two
+     plain arcs — shadowBlur per particle was the expensive part. */
+  if(document.hidden || document.querySelector('.modal.open')) return;
+  if(now-lastEmber<33) return;
+  lastEmber=now;
   ctx.clearRect(0,0,W,H);
   for (let i=0;i<parts.length;i++){
     const p = parts[i];
@@ -767,15 +776,16 @@ for (let i=0;i<110;i++) parts.push(spawn(true));
     else {
       const fade = Math.min(1, (p.max-p.life)/80, p.life/40);
       ctx.beginPath();
+      ctx.arc(p.x, p.y, p.r*2.6, 0, 7);
+      ctx.fillStyle = `hsla(${p.hue},85%,60%,${(p.a*fade*.15).toFixed(3)})`;
+      ctx.fill();
+      ctx.beginPath();
       ctx.arc(p.x, p.y, p.r, 0, 7);
       ctx.fillStyle = `hsla(${p.hue},85%,65%,${(p.a*fade).toFixed(3)})`;
-      ctx.shadowColor = `hsla(${p.hue},90%,60%,.8)`;
-      ctx.shadowBlur = 12;
-      ctx.fill(); ctx.shadowBlur = 0;
+      ctx.fill();
     }
   }
-  requestAnimationFrame(tick);
-})();
+})(performance.now());
 
 /* ---- tabs (home hub) ---- */
 function goTab(id){
@@ -1676,7 +1686,8 @@ document.getElementById('slFin').addEventListener('click',function(){
     if(!SBEngine.has()){ if(hint) hint.textContent='Load an image first.'; return; }
     const item={id:'st'+Date.now(), folder:'unclaimed', date:new Date().toISOString().slice(0,10),
       stencil:slFitCanvas(SBEngine.styled(false),1200).toDataURL('image/png'),
-      original:slFitCanvas(SBEngine.src(),1200).toDataURL('image/jpeg',0.85)};
+      original:slFitCanvas(SBEngine.src(),1200).toDataURL('image/jpeg',0.85),
+      thumb:slFitCanvas(SBEngine.styled(true),320).toDataURL('image/jpeg',0.82)};
     stencils.push(item);
     let ok=false, err='';
     try{ slSave(); ok=slPersisted(item.id); }catch(e){ err=(e&&e.message)?e.message:String(e); }
@@ -2099,7 +2110,7 @@ function renderFolder(folder){
   if(!list.length){ grid.innerHTML='<p class="statusline">Empty.</p>'; return; }
   list.forEach(s=>{
     const d=document.createElement('div');
-    d.innerHTML='<img src="'+s.stencil+'" style="width:100%;border-radius:8px;cursor:pointer;background:#fff">';
+    d.innerHTML='<img src="'+(s.thumb||s.stencil)+'" style="width:100%;border-radius:8px;cursor:pointer;background:#fff">';
     d.addEventListener('click',()=>openStencil(s.id));
     grid.appendChild(d);
   });
@@ -2155,6 +2166,10 @@ function initSmoke(canvas){
   const W = w, H = h;
   const EYES = [[0.467,0.320],[0.533,0.317]].map(e=>[(e[0]+0.25)/1.5*W, (e[1]+0.25)/1.5*H]);
   (function tick(now){
+    requestAnimationFrame(tick);
+    if(document.hidden || document.querySelector('.modal.open')) return;
+    if(now-(canvas._lt||0)<33) return;
+    canvas._lt=now;
     const t = now/1000;
     ctx.clearRect(0,0,W,H);
     ctx.globalCompositeOperation = 'lighter';
@@ -2169,7 +2184,6 @@ function initSmoke(canvas){
       ctx.fillStyle = g;
       ctx.beginPath(); ctx.arc(e[0],e[1],er,0,7); ctx.fill();
     }
-    requestAnimationFrame(tick);
   })(performance.now());
 }
 initSmoke(document.querySelector('.logo-wrap canvas.smoke'));
