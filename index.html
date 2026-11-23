@@ -430,28 +430,22 @@ function autoWin(w,h){
 function detailK(v){ return 0.5-(v/100)*0.4; }
 
 /* XDoG line art: extended Difference of Gaussians -> clean ink lines.
-   v (0-100): line density, smooth and monotonic — higher = more lines.
-   The ink threshold is a percentile of edge strength, so global
-   brightness/contrast shifts can't reshuffle lines sectorally — the
-   detector adapts instead of popping regions in and out. */
+   v (0-200): line density. The ink threshold is FIXED for a given v
+   (eps halves every +50), so masks are nested: raising v only ever
+   ADDS lines, never removes or reshuffles them, and a brightness or
+   contrast change in one region cannot move lines in another. */
 function xdogMask(gray,w,h,v){
   const r1=2, r2=3;
   const b1=boxBlur(gray,w,h,r1), b2=boxBlur(gray,w,h,r2);
-  const n=w*h, hist=new Uint32Array(256);
-  for(let i=0;i<n;i++){
-    const d=b1[i]-0.99*b2[i];
-    if(d<0){ const a=(-d)|0; hist[a>255?255:a]++; }
-  }
-  const P=v*0.12, target=n*P/100;
-  let cum=0, thr=0;
-  for(let t=255;t>=0;t--){ cum+=hist[t]; if(cum>=target){ thr=t; break; } }
-  const eps=-Math.max(thr,2);
+  const n=w*h;
+  const eps=-Math.max(0.5, 2*Math.pow(2,(100-v)/50));
   const m=new Uint8Array(n);
   for(let i=0;i<n;i++) m[i]=(b1[i]-0.99*b2[i])<eps?1:0;
   return m;
 }
 /* Binary dilation: expands ink regions. */
 function dilateMask(mask,w,h,r){
+  r=Math.round(r); // integer radii only: fractional steps read off-grid pixels and collapse the mask
   if(r<=0) return mask;
   const n=w*h, tmp=new Uint8Array(n), out=new Uint8Array(n);
   for(let y=0;y<h;y++){
@@ -482,6 +476,7 @@ function dilateMask(mask,w,h,r){
    lines become solid and continuous. This is "solidify" that respects fine
    line work. */
 function closeMask(mask,w,h,r){
+  r=Math.round(r);
   if(r<=0) return mask;
   const d=dilateMask(mask,w,h,r);
   const n=w*h, inv=new Uint8Array(n);
@@ -498,15 +493,8 @@ function closeMask(mask,w,h,r){
 function xdogSoftMask(gray,w,h,v){
   const r1=1, r2=2;
   const b1=boxBlur(gray,w,h,r1), b2=boxBlur(gray,w,h,r2);
-  const n=w*h, hist=new Uint32Array(256);
-  for(let i=0;i<n;i++){
-    const d=b1[i]-0.99*b2[i];
-    if(d<0){ const a=(-d)|0; hist[a>255?255:a]++; }
-  }
-  const P=v*0.184, target=n*P/100;
-  let cum=0, thr=0;
-  for(let t=255;t>=0;t--){ cum+=hist[t]; if(cum>=target){ thr=t; break; } }
-  const eps=-Math.max(thr,0.5);
+  const n=w*h;
+  const eps=-Math.max(0.3, 1.2*Math.pow(2,(83-v)/50));
   const m=new Uint8Array(n);
   for(let i=0;i<n;i++) m[i]=(b1[i]-0.99*b2[i])<eps?1:0;
   return m;
@@ -554,16 +542,64 @@ function labelComponents(mask, w, h, value){
   return {labels, sizes, count};
 }
 
-/* Despeckle: delete ink blobs smaller than minSize AND fill paper holes
-   smaller than minSize. minSize<=0 disables. */
+/* Despeckle: delete ink blobs smaller than minSize AND resolve paper
+   holes smaller than minSize. minSize is calibrated at 1200x1200 and
+   scaled by image area, so the slider behaves the same at any size.
+   Ring rule: a small hole wrapped ONLY in thin ink is a glow artifact
+   (the detector rings bright specks) — delete the ring, keep the hole.
+   A hole inside substantial ink (a letter counter) is filled instead.
+   minSize<=0 disables. */
 function despeckleMask(mask, w, h, minSize){
   if(minSize<=0) return mask;
+  const eff=Math.max(1, Math.round(minSize*(w*h)/1440000));
   let L=labelComponents(mask,w,h,1);
   for(let i=0;i<w*h;i++)
-    if(mask[i]===1 && L.sizes[L.labels[i]]<minSize) mask[i]=0;
+    if(mask[i]===1 && L.sizes[L.labels[i]]<eff) mask[i]=0;
   L=labelComponents(mask,w,h,0);
-  for(let i=0;i<w*h;i++)
-    if(mask[i]===0 && L.sizes[L.labels[i]]<minSize) mask[i]=1;
+  const bg=new Set();
+  for(let x=0;x<w;x++){ bg.add(L.labels[x]); bg.add(L.labels[(h-1)*w+x]); }
+  for(let y=0;y<h;y++){ bg.add(L.labels[y*w]); bg.add(L.labels[y*w+w-1]); }
+  const LI=labelComponents(mask,w,h,1);
+  // ink comp -> adjacent paper comps (to spot standalone loops: ink that
+  // touches nothing but one hole and the background is a drawn ring)
+  const inkPaper=new Map();
+  const holeInk=new Map();
+  for(let y=0;y<h;y++) for(let x=0;x<w;x++){
+    const i=y*w+x; if(mask[i]!==0) continue;
+    const hc=L.labels[i];
+    const nbs=[x>0?i-1:-1, x<w-1?i+1:-1, y>0?i-w:-1, y<h-1?i+w:-1];
+    for(let k=0;k<4;k++){
+      const n=nbs[k];
+      if(n>=0&&mask[n]===1){
+        const ic=LI.labels[n];
+        if(!inkPaper.has(ic)) inkPaper.set(ic,new Set());
+        inkPaper.get(ic).add(hc);
+        if(!bg.has(hc) && L.sizes[hc]<eff*40){
+          if(!holeInk.has(hc)) holeInk.set(hc,new Set());
+          holeInk.get(hc).add(ic);
+        }
+      }
+    }
+  }
+  const killInk=new Set(), fillHole=new Set();
+  holeInk.forEach(function(inks,hc){
+    let ring=true, allThin=true;
+    inks.forEach(function(ic){
+      if(LI.sizes[ic]>=eff*16) ring=false;
+      if(LI.sizes[ic]>=eff*6) allThin=false;
+      const adj=inkPaper.get(ic);
+      adj.forEach(function(pc){ if(pc!==hc && !bg.has(pc)) ring=false; });
+    });
+    let tot=0; inks.forEach(function(ic){ tot+=LI.sizes[ic]; });
+    if(ring || (L.sizes[hc]<eff && allThin && tot<eff*8)){
+      inks.forEach(function(ic){ killInk.add(ic); });
+    }
+    else if(L.sizes[hc]<eff) fillHole.add(hc);
+  });
+  for(let i=0;i<w*h;i++){
+    if(mask[i]===1 && killInk.has(LI.labels[i])) mask[i]=0;
+    else if(mask[i]===0 && fillHole.has(L.labels[i])) mask[i]=1;
+  }
   return mask;
 }
 
@@ -647,13 +683,22 @@ function addBridges(mask, w, h, bridgeW){
 }
 
 /* Split gray into `count` tone bands (for multi-layer stencils).
-   Returns array of masks; band 0 = darkest tones. */
+   Returns array of masks; band 0 = darkest tones. Bands split by
+   POPULATION (histogram quantiles) so each holds ~equal pixel counts;
+   equal intervals starved the upper bands on skewed images. */
 function layerBands(gray, w, h, count){
+  const hist=new Uint32Array(256);
+  for(let i=0;i<w*h;i++) hist[gray[i]]++;
+  const total=w*h, cuts=[];
+  let cum=0, ti=1;
+  for(let t=0;t<256&&ti<count;t++){
+    cum+=hist[t];
+    if(cum>=total*ti/count){ cuts.push(t); ti++; }
+  }
   const bands=[];
   for(let b=0;b<count;b++) bands.push(new Uint8Array(w*h));
   for(let i=0;i<w*h;i++){
-    let b=(gray[i]*count)>>8;
-    if(b>=count) b=count-1;
+    let b=0; while(b<cuts.length && gray[i]>cuts[b]) b++;
     bands[b][i]=1;
   }
   return bands;
@@ -1029,7 +1074,7 @@ const TOOLS={
     fmt:deltaFmt},
   solid:{min:-100,max:100,step:1,
     get:function(){return (S.settings.solid/4)*100;},
-    set:function(v){S.settings.solid=v<=0?0:(v/100)*4;},
+    set:function(v){S.settings.solid=v<=0?0:Math.ceil((v/100)*4);},
     fmt:deltaFmt}
 };
 let activeTool="level";
@@ -1068,11 +1113,6 @@ function softCfg(){
     set:function(v){S.settings.softAmt=sliderToAbs(v,0,200,83);},
     fmt:deltaFmt};
 }
-function softCfg(){
-  return {min:0,max:100,step:1,label:"Soft",
-    get:function(){return S.settings.softAmt;},set:function(v){S.settings.softAmt=v;},
-    fmt:function(v){return v+"%";}};
-}
 function toolCfg(){
   return activeTool==="level"?levelCfg():activeTool==="soft"?softCfg():TOOLS[activeTool];
 }
@@ -1103,16 +1143,15 @@ function syncToolUI(){
   $("toolVal").textContent=cfg.fmt(cfg.get());
   const chip=document.querySelector('#toolChips button[data-tool="level"]');
   if(chip) chip.textContent=cfg.label;
-  // in line-art mode Bright/Contrast are near-invariant (percentile adapts),
-  // so hide them instead of presenting dead controls
+  // Soft/Solid only exist in line-art mode (they feed the line pipeline).
+  // Bright/Contrast/Smooth stay available in every mode: with the fixed
+  // line threshold they genuinely change line extraction on dark images.
   const la=S.settings.mode==="lineart";
-  if(la&&(activeTool==="bright"||activeTool==="contrast"||activeTool==="blur")) activeTool="level";
   if(!la&&activeTool==="soft") activeTool="level";
   if(!la&&activeTool==="solid") activeTool="level";
   document.querySelectorAll("#toolChips button").forEach(function(b){
     const t=b.dataset.tool;
-    if(la&&(t==="bright"||t==="contrast"||t==="blur")){ b.style.display="none"; }
-    else if(!la&&(t==="soft"||t==="solid")){ b.style.display="none"; }
+    if(!la&&(t==="soft"||t==="solid")){ b.style.display="none"; }
     else { b.style.display=""; }
     b.classList.toggle("on",t===activeTool);
   });
