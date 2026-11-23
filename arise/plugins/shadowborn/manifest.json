@@ -1,0 +1,9 @@
+{
+  "name": "Shadowborn",
+  "slug": "shadowborn",
+  "version": "6.4.0",
+  "description": "Stencil Lab \u2014 Shadowborn stencil editor (v6 engine), embedded by Arise; on-device, finishes to Unclaimed Stencils.",
+  "entry": "index.html",
+  "author": "Brandon L. Adams",
+  "copyright": "(c) 2026 Brandon L. Adams. Proprietary. All rights reserved."
+}

@@ -1,0 +1,17 @@
+/* Arise theme override for the Shadowborn plugin (v6.x editor).
+   Loaded by the plugin only when Arise embeds it (?embed=1&theme=arise).
+   The plugin stays untouched; Arise remaps its variables to our palette.
+   The compare page itself stays paper-white on purpose — it's the sheet
+   the stencil will print on. */
+:root{
+  --work:#0f0f1a !important;
+  --panel:#1a1a2e !important;
+  --ink:#e8e8f0 !important;
+  --muted:#8a8aa0 !important;
+  --line:#2c2c44 !important;
+  --violet:#22d3ee !important;
+  --violet-dk:#0e7490 !important;
+}
+header{background:#14142a !important;}
+#rail{background:#14142a !important;}
+.seg button.on, .qpill.on{color:#22d3ee !important;}
