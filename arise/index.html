@@ -281,7 +281,7 @@
 (function(){
   var N=14, lit=0, start=Date.now(), flames=[];
   var ring=document.getElementById('ldRing');
-  document.getElementById('ldLogo').src=document.getElementById('hdrLogo').src;
+  window.addEventListener('DOMContentLoaded',function(){ var hd=document.getElementById('hdrLogo'); if(hd) document.getElementById('ldLogo').src=hd.src; });
   var defs='<defs><linearGradient id="ldg" x1="0" y1="1" x2="0" y2="0"><stop offset="0" stop-color="#e0f2fe"/><stop offset=".45" stop-color="#38bdf8"/><stop offset="1" stop-color="#2563eb"/></linearGradient></defs>';
   var body='<path d="M10 1 C13 7 18 11 18 18 a8 9 0 1 1 -16 0 C2 11 7 7 10 1 Z" fill="url(#ldg)"/><path d="M10 12 C11.6 15 13.5 16.8 13.5 20 a3.5 4 0 1 1 -7 0 C6.5 16.8 8.4 15 10 12 Z" fill="#f0f9ff" opacity=".92"/>';
   for(var i=0;i<N;i++){
