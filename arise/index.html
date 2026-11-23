@@ -493,6 +493,7 @@
       <p class="hint" id="galHint">Tap to view original</p>
     </div>
     <div class="btnrow">
+      <button id="galDel" class="ghost" style="color:#f87171;border-color:rgba(248,113,113,.55)">Delete</button>
       <button id="galClose" class="ghost">Close</button>
     </div>
 
@@ -2105,6 +2106,7 @@ function renderFolder(folder){
 }
 document.querySelectorAll('.folder').forEach(f=>{
   f.addEventListener('click', ()=>{
+    galFolder=f.dataset.folder;
     document.getElementById('folderList').style.display='none';
     document.getElementById('folderView').style.display='block';
     document.getElementById('folderTitle').textContent = folderNames[f.dataset.folder];
@@ -2113,7 +2115,7 @@ document.querySelectorAll('.folder').forEach(f=>{
 });
 renderFolderCounts();
 /* stencil viewer with tap-toggle original */
-let galId=null, galOrig=false;
+let galId=null, galOrig=false, galFolder=null;
 function openStencil(id){
   galId=id; galOrig=false;
   const s=stencils.find(x=>x.id===id); if(!s) return;
@@ -2129,6 +2131,15 @@ document.getElementById('galImg').addEventListener('click',()=>{
   document.getElementById('galHint').textContent=galOrig?'Tap to view stencil':'Tap to view original';
 });
 document.getElementById('galClose').addEventListener('click',()=>document.getElementById('galModal').classList.remove('open'));
+document.getElementById('galDel').addEventListener('click',()=>{
+  const s=stencils.find(x=>x.id===galId); if(!s) return;
+  if(!confirm('Delete this stencil? This cannot be undone.')) return;
+  stencils=stencils.filter(x=>x.id!==galId);
+  slSave();
+  document.getElementById('galModal').classList.remove('open');
+  if(typeof renderFolderCounts==='function') renderFolderCounts();
+  if(galFolder) renderFolder(galFolder);
+});
 document.getElementById('folderBack').addEventListener('click', ()=>{
   document.getElementById('folderView').style.display='none';
   document.getElementById('folderList').style.display='flex';
