@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Shadowborn — Create a Stencil Online</title>
 <!--
-  Shadowborn Stencil Maker v6.2 — exact editor clone
+  Shadowborn Stencil Maker v6.3 — exact editor clone
   Editor layout and control model follow stencilmaker.org's editor:
   header + left tool rail + compare canvas + right control panel.
   Engine (XDoG / Sauvola / tone bands) is our own code, on-device only.
@@ -211,7 +211,7 @@
     <button class="rbtn" id="rlRotate" title="Rotate — rotate the original and stencil 90 degrees clockwise"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 12a8 8 0 1 1-2.3-5.6"/><path d="M20 3v4h-4"/></svg></button>
     <button class="rbtn" id="rlMirror" title="Mirror — mirror the stencil for transfer paper or reverse painting"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v18" stroke-dasharray="3 3"/><path d="M9 7L4 12l5 5M15 7l5 5-5 5"/></svg></button>
     <button class="rbtn" id="rlInvert" title="Invert — swap the solid and open areas of the stencil"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 3a9 9 0 0 1 0 18z" fill="currentColor" stroke="none"/></svg></button>
-    <button class="rbtn on" id="rlDenoise" title="Denoise — clear loose specks and pinholes before lines are thickened"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="7" cy="7" r="1.4" fill="currentColor"/><circle cx="16" cy="10" r="1.4" fill="currentColor"/><circle cx="10" cy="16" r="1.4" fill="currentColor"/><circle cx="18" cy="18" r="1.4" fill="currentColor"/></svg></button>
+    <button class="rbtn" id="rlDenoise" title="Denoise — clear loose specks and pinholes before lines are thickened"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="7" cy="7" r="1.4" fill="currentColor"/><circle cx="16" cy="10" r="1.4" fill="currentColor"/><circle cx="10" cy="16" r="1.4" fill="currentColor"/><circle cx="18" cy="18" r="1.4" fill="currentColor"/></svg></button>
     <button class="rbtn" id="rlCloseGaps" title="Close Gaps — close tiny breaks in stencil lines"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 12h5M15 12h5"/><path d="M9 9l3 3-3 3M15 9l-3 3 3 3"/></svg></button>
     <div class="rdiv"></div>
     <button class="rbtn" id="rlFit" title="Fit Canvas — fit the stencil page back into the workspace"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg></button>
@@ -235,7 +235,7 @@
       </div>
     </div>
     <div class="pill" id="pillKind">Original <span class="arr">&#8594;</span> Stencil</div>
-    <div class="pill" id="pillMode">Edge / <b>Clean Outline</b></div>
+    <div class="pill" id="pillMode">Thin Line / <b>Custom</b></div>
     <div class="pill" id="cmpPill">Drag to compare <b id="cmpPct">52%</b></div>
     <div id="zoomCluster">
       <button id="zoomOut" aria-label="Zoom out">&minus;</button>
@@ -272,11 +272,11 @@
       <section class="blk">
         <div class="blkhead">
           <div><h3>Quick style</h3><div class="sub">Choose a practical starting point.</div></div>
-          <div class="val" id="styleName">Clean Outline</div>
+          <div class="val" id="styleName">Custom</div>
         </div>
         <div class="grid2" id="presetGrid">
           <button class="qpill" data-preset="bold"><span class="dot"></span>Bold Cut</button>
-          <button class="qpill on" data-preset="clean"><span class="dot"></span>Clean Outline</button>
+          <button class="qpill" data-preset="clean"><span class="dot"></span>Clean Outline</button>
           <button class="qpill" data-preset="fine"><span class="dot"></span>Fine Line</button>
           <button class="qpill" data-preset="print"><span class="dot"></span>Print Ready</button>
         </div>
@@ -285,28 +285,28 @@
       <section class="blk">
         <div class="blkhead">
           <div><h3>Stencil shape</h3><div class="sub">Updates automatically as you drag.</div></div>
-          <div class="modepill" id="modePill">Edge</div>
+          <div class="modepill" id="modePill">Thin Line</div>
         </div>
         <div class="ctl">
-          <div class="lab"><span>Threshold</span><span class="v" id="thresholdVal">54%</span></div>
-          <input type="range" id="sldThreshold" min="0" max="100" value="54" step="1">
+          <div class="lab"><span>Threshold</span><span class="v" id="thresholdVal">0%</span></div>
+          <input type="range" id="sldThreshold" min="0" max="100" value="0" step="1">
         </div>
         <div class="ctl">
-          <div class="lab"><span>Line weight</span><span class="v" id="lineWeightVal">52%</span></div>
-          <input type="range" id="sldLineWeight" min="0" max="100" value="52" step="1">
+          <div class="lab"><span>Line weight</span><span class="v" id="lineWeightVal">0%</span></div>
+          <input type="range" id="sldLineWeight" min="0" max="100" value="0" step="1">
         </div>
         <div class="ctl">
-          <div class="lab"><span>Contrast</span><span class="v" id="contrastVal">78%</span></div>
-          <input type="range" id="sldContrast" min="0" max="100" value="78" step="1">
+          <div class="lab"><span>Contrast</span><span class="v" id="contrastVal">74%</span></div>
+          <input type="range" id="sldContrast" min="0" max="100" value="74" step="1">
         </div>
         <div id="moreWrap" class="hidden">
           <div class="ctl">
-            <div class="lab"><span>Detail</span><span class="v" id="detailVal">68%</span></div>
-            <input type="range" id="sldDetail" min="0" max="100" value="68" step="1">
+            <div class="lab"><span>Detail</span><span class="v" id="detailVal">78%</span></div>
+            <input type="range" id="sldDetail" min="0" max="100" value="78" step="1">
           </div>
           <div class="ctl">
-            <div class="lab"><span>Shadow cleanup</span><span class="v" id="shadowVal">64%</span></div>
-            <input type="range" id="sldShadow" min="0" max="100" value="64" step="1">
+            <div class="lab"><span>Shadow cleanup</span><span class="v" id="shadowVal">0%</span></div>
+            <input type="range" id="sldShadow" min="0" max="100" value="0" step="1">
           </div>
           <div class="ctl">
             <div class="lab"><span>Ink opacity</span><span class="v" id="opacityVal">100%</span></div>
@@ -320,8 +320,8 @@
         <div class="blkhead"><div><h3>Conversion mode</h3></div></div>
         <div class="modes" id="modeSeg">
           <button data-mode="threshold">Threshold</button>
-          <button data-mode="edge" class="on">Edge</button>
-          <button data-mode="thinline">Thin Line</button>
+          <button data-mode="edge">Edge</button>
+          <button data-mode="thinline" class="on">Thin Line</button>
           <button data-mode="adaptive">Adaptive</button>
           <button data-mode="layers">Color Layers</button>
         </div>
@@ -335,7 +335,7 @@
         <div class="tools">
           <button id="btnRotate">Rotate 0&deg;</button>
           <button id="btnInvert">Invert</button>
-          <button id="btnDenoise" class="on">Denoise</button>
+          <button id="btnDenoise">Denoise</button>
           <button id="btnCloseGaps">Close Gaps</button>
         </div>
       </section>
@@ -428,14 +428,16 @@
 "use strict";
 /* ================= state ================= */
 const $=function(id){ return document.getElementById(id); };
-const DEFAULTS={mode:"edge",threshold:54,detail:68,lineWeight:52,contrast:78,shadow:64,
-  denoise:true,closeGaps:false,invert:false,opacity:100,ink:"#000000",
+/* Brandon's default set (his screenshot, 2026-11-23): Thin Line,
+   pure lines, no cleanup passes — opens and resets to exactly this. */
+const DEFAULTS={mode:"thinline",threshold:0,detail:78,lineWeight:0,contrast:74,shadow:0,
+  denoise:false,closeGaps:false,invert:false,opacity:100,ink:"#000000",
   transparent:true,mirror:false,pageSize:"a4"};
 const S={
   srcCanvas:null, origCanvas:null, srcW:0, srcH:0, gray:null, grayDirty:true,
   mask:null, tone:null, rot:0,
   settings:Object.assign({},DEFAULTS),
-  styleName:"Clean Outline", fmt:"png", compare:true, cmpSplit:0.52
+  styleName:"Custom", fmt:"png", compare:true, cmpSplit:0.52
 };
 const Z={s:1,tx:0,ty:0,fit:1}; // zoom/pan; s is absolute scale, fit = fitted scale
 const MAXDIM=1800; // working size: at most 1800 px on the long side
@@ -1377,14 +1379,14 @@ function resetAll(){
   S.rot=0; S.grayDirty=true;
   $("btnRotate").innerHTML="Rotate 0&deg;";
   if(S.srcCanvas) fitView();
-  setDenoise(true); setCloseGaps(false);
+  setDenoise(false); setCloseGaps(false);
   setPressed("btnInvert",false); setPressed("rlInvert",false);
   setMirror(false); setTransparent(true);
   setPageSize("a4");
   S.compare=true; setPressed("rlCompare",true);
-  setStyleName("Clean Outline");
+  setStyleName("Custom");
   syncSliders(); schedule();
-  status("Settings reset to Clean Outline defaults.");
+  status("Settings reset to your defaults.");
 }
 $("resetBtn").addEventListener("click",resetAll);
 $("rlReset").addEventListener("click",resetAll);
