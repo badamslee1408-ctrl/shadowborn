@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Shadowborn — Create a Stencil Online</title>
 <!--
-  Shadowborn Stencil Maker v6.1 — exact editor clone
+  Shadowborn Stencil Maker v6.2 — exact editor clone
   Editor layout and control model follow stencilmaker.org's editor:
   header + left tool rail + compare canvas + right control panel.
   Engine (XDoG / Sauvola / tone bands) is our own code, on-device only.
@@ -864,7 +864,7 @@ function currentGray(){
     // dead there (at a fixed Contrast it cannot disturb Detail's
     // add-only guarantee, which is measured per-slider)
     if((st.mode==="edge"||st.mode==="thinline")&&st.contrast>0)
-      g=localContrast(g,S.srcW,S.srcH,st.contrast*0.35);
+      g=localContrast(g,S.srcW,S.srcH,st.contrast*0.15);
     // Pre-blur. In the LINE modes (Edge / Thin Line) the blur is FIXED:
     // Detail there is purely the line finder's sensitivity, so raising
     // it can only ever add lines, never move or remove them. In the
@@ -905,7 +905,8 @@ function lwAmount(){
   const st=S.settings;
   const scale=Math.min(S.srcW,S.srcH)/800;
   if(st.mode==="edge"||st.mode==="thinline")
-    return (st.lineWeight/100)*2.5*scale;
+    // Thin Line stays finer than Edge at the same setting (reference)
+    return (st.lineWeight/100)*2.5*scale*(st.mode==="thinline"?0.6:1);
   if(st.lineWeight<=40) return 0;
   return ((st.lineWeight-40)/60)*3*scale;
 }
