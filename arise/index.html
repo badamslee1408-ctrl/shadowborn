@@ -452,7 +452,7 @@
       </div>
       <div id="slEd" style="display:none">
         <div style="position:sticky;top:0;z-index:6;background:var(--panel);padding:2px 0 10px">
-        <canvas id="slCv" style="width:100%;height:auto;max-height:60vh;object-fit:contain;border-radius:10px;background:#fff;touch-action:pan-y"></canvas>
+        <canvas id="slCv" style="width:100%;height:46vh;object-fit:contain;border-radius:10px;background:#fff;touch-action:pan-y"></canvas>
         <div style="display:flex;align-items:center;gap:8px;margin-top:6px">
           <span class="hint" style="flex:none">Stencil</span>
           <input type="range" id="slCmp" min="0" max="100" value="50" style="flex:1;accent-color:#22d3ee">
@@ -1612,8 +1612,12 @@ document.getElementById('slCmp').addEventListener('input',function(){ window.__s
   const cv=document.getElementById('slCv'); if(!cv) return;
   let drag=false;
   function upd(e){
-    const r=cv.getBoundingClientRect(); if(!r.width) return;
-    const f=Math.max(0,Math.min(1,(e.clientX-r.left)/r.width));
+    const r=cv.getBoundingClientRect(); if(!r.width||!cv.width) return;
+    /* the image is letterboxed inside the locked stage — map the
+       pointer to the drawn image, not the box */
+    const sc=Math.min(r.width/cv.width, r.height/cv.height);
+    const dw=cv.width*sc, ox=r.left+(r.width-dw)/2;
+    const f=Math.max(0,Math.min(1,(e.clientX-ox)/dw));
     const s=document.getElementById('slCmp'); if(s) s.value=Math.round(f*100);
     window.__slRender();
   }
@@ -1626,12 +1630,37 @@ document.getElementById('slCancel').addEventListener('click',function(){
   document.getElementById('slEd').style.display='none';
   document.getElementById('slHome').style.display='block';
 });
+function slFitCanvas(src,max){
+  const w=src.width,h=src.height,m=Math.max(w,h);
+  if(m<=max) return src;
+  const k=max/m, c=document.createElement('canvas');
+  c.width=Math.round(w*k); c.height=Math.round(h*k);
+  c.getContext('2d').drawImage(src,0,0,c.width,c.height);
+  return c;
+}
+function slPersisted(id){
+  try{ return JSON.parse(localStorage.getItem('arise_stencils')||'[]').some(function(x){ return x.id===id; }); }
+  catch(e){ return false; }
+}
 document.getElementById('slFin').addEventListener('click',function(){
   if(!SBEngine.has()) return;
-  const stencil=SBEngine.styled(false).toDataURL('image/png');
-  const original=SBEngine.src().toDataURL('image/jpeg',0.85);
-  stencils.push({id:'st'+Date.now(), folder:'unclaimed', stencil:stencil, original:original, date:new Date().toISOString().slice(0,10)});
-  slSave();
+  const item={id:'st'+Date.now(), folder:'unclaimed', date:new Date().toISOString().slice(0,10),
+    stencil:slFitCanvas(SBEngine.styled(false),1200).toDataURL('image/png'),
+    original:slFitCanvas(SBEngine.src(),1200).toDataURL('image/jpeg',0.85)};
+  stencils.push(item);
+  let ok=false;
+  try{ slSave(); ok=slPersisted(item.id); }catch(e){ ok=false; }
+  if(!ok){
+    /* storage is tight — retry once at a smaller size before failing */
+    item.stencil=slFitCanvas(SBEngine.styled(false),800).toDataURL('image/png');
+    item.original=slFitCanvas(SBEngine.src(),800).toDataURL('image/jpeg',0.8);
+    try{ slSave(); ok=slPersisted(item.id); }catch(e){ ok=false; }
+  }
+  if(!ok){
+    stencils.splice(stencils.indexOf(item),1);
+    alert('Could not save — the app storage is full. Remove some Gallery items and try again.');
+    return;
+  }
   document.getElementById('slEd').style.display='none';
   document.getElementById('slHome').style.display='block';
   alert('Saved to Unclaimed Stencils.');
