@@ -430,7 +430,7 @@
   <div class="sys modal-card" style="max-width:95vw">
     <h2 id="galTitle">[ Stencil ]</h2>
     <div style="text-align:center">
-      <img id="galImg" style="max-width:100%;max-height:60vh;border-radius:10px;cursor:pointer">
+      <img id="galImg" style="max-width:100%;max-height:60vh;border-radius:10px;cursor:pointer;background:#fff">
       <p class="hint" id="galHint">Tap to view original</p>
     </div>
     <div class="btnrow">
@@ -2093,7 +2093,7 @@ function renderFolder(folder){
   if(!list.length){ grid.innerHTML='<p class="statusline">Empty.</p>'; return; }
   list.forEach(s=>{
     const d=document.createElement('div');
-    d.innerHTML='<img src="'+s.stencil+'" style="width:100%;border-radius:8px;cursor:pointer">';
+    d.innerHTML='<img src="'+s.stencil+'" style="width:100%;border-radius:8px;cursor:pointer;background:#fff">';
     d.addEventListener('click',()=>openStencil(s.id));
     grid.appendChild(d);
   });
