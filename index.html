@@ -1,5 +1,5 @@
 <!--
-  Stencil Lab (Shadowborn) v2.0 — Tattoo Shop Plugin
+  Stencil Lab (Shadowborn) v2.2 — Tattoo Shop Plugin
   Copyright (c) 2026 Brandon L. Adams <b.adams.lee1408@gmail.com>
   Proprietary. All rights reserved.
 -->
@@ -543,7 +543,7 @@ function labelComponents(mask, w, h, value){
 }
 
 /* Despeckle: delete ink blobs smaller than minSize AND resolve paper
-   holes smaller than minSize. minSize is calibrated at 1200x1200 and
+   holes smaller than minSize. minSize is calibrated at ~300k pixels and
    scaled by image area, so the slider behaves the same at any size.
    Ring rule: a small hole wrapped ONLY in thin ink is a glow artifact
    (the detector rings bright specks) — delete the ring, keep the hole.
@@ -551,7 +551,11 @@ function labelComponents(mask, w, h, value){
    minSize<=0 disables. */
 function despeckleMask(mask, w, h, minSize){
   if(minSize<=0) return mask;
-  const eff=Math.max(1, Math.round(minSize*(w*h)/1440000));
+  // normalize: minSize is calibrated at ~300k pixels (a typical phone
+  // image); scale by image area so the slider behaves the same at any
+  // size. (At 1200x1200 reference the standard setting was too weak to
+  // bite on phone-size images and glow rings survived it.)
+  const eff=Math.max(1, Math.round(minSize*(w*h)/300000));
   let L=labelComponents(mask,w,h,1);
   for(let i=0;i<w*h;i++)
     if(mask[i]===1 && L.sizes[L.labels[i]]<eff) mask[i]=0;
