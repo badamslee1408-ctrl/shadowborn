@@ -262,11 +262,14 @@
 .ld-ring::after{content:""; position:absolute; inset:44px; border-radius:50%; border:1px solid rgba(56,189,248,.12);}
 .ld-logo{position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); width:158px; height:auto; border-radius:20px;
   box-shadow:0 0 44px rgba(37,99,235,.35);}
-.ld-flame{position:absolute; width:22px; height:32px; transform:translate(-50%,-58%); opacity:.14; filter:grayscale(.7);}
-.ld-flame svg{width:100%; height:100%; display:block; transform-origin:50% 90%;}
+.ld-flame{position:absolute; width:24px; height:36px; transform:translate(-50%,-58%); opacity:.14; filter:grayscale(.7);}
+.ld-flame svg{width:100%; height:100%; display:block; transform-origin:50% 92%; overflow:visible;}
+.ld-flame .fl-mid{transform-box:fill-box; transform-origin:50% 100%;}
 .ld-flame.lit{opacity:1; filter:drop-shadow(0 0 7px rgba(56,189,248,.95)) drop-shadow(0 0 18px rgba(37,99,235,.5));}
-.ld-flame.lit svg{animation:ldFlick .45s ease-in-out infinite alternate;}
+.ld-flame.lit svg{animation:ldFlick var(--fd,.45s) ease-in-out infinite alternate;}
+.ld-flame.lit .fl-mid{animation:ldSway .6s ease-in-out infinite alternate;}
 @keyframes ldFlick{from{transform:scale(1) rotate(-2.5deg);} to{transform:scale(1.1,1.18) rotate(2.5deg);}}
+@keyframes ldSway{from{transform:scaleY(1) skewX(-1.6deg);} to{transform:scaleY(1.07) skewX(1.8deg);}}
 .ld-cap{color:#8a8aa0; font-size:12px; letter-spacing:.42em; text-transform:uppercase; text-indent:.42em;}
 </style>
 </head>
@@ -289,22 +292,33 @@
     L0.addEventListener(ev,function(e){ e.preventDefault(); e.stopPropagation(); },{passive:false});
   });
   document.body.style.overflow='hidden';
-  var defs='<defs><linearGradient id="ldg" x1="0" y1="1" x2="0" y2="0"><stop offset="0" stop-color="#e0f2fe"/><stop offset=".45" stop-color="#38bdf8"/><stop offset="1" stop-color="#2563eb"/></linearGradient></defs>';
-  var body='<path d="M10 1 C13 7 18 11 18 18 a8 9 0 1 1 -16 0 C2 11 7 7 10 1 Z" fill="url(#ldg)"/><path d="M10 12 C11.6 15 13.5 16.8 13.5 20 a3.5 4 0 1 1 -7 0 C6.5 16.8 8.4 15 10 12 Z" fill="#f0f9ff" opacity=".92"/>';
+  var defs='<defs>'
+    +'<linearGradient id="ldo" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#1e3a8a"/><stop offset=".55" stop-color="#2563eb"/><stop offset="1" stop-color="#93c5fd"/></linearGradient>'
+    +'<linearGradient id="ldm" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#1d4ed8"/><stop offset=".6" stop-color="#38bdf8"/><stop offset="1" stop-color="#bae6fd"/></linearGradient>'
+    +'<linearGradient id="ldc" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#7dd3fc"/><stop offset="1" stop-color="#ffffff"/></linearGradient>'
+    +'<radialGradient id="ldglow"><stop offset="0" stop-color="#38bdf8" stop-opacity=".55"/><stop offset="1" stop-color="#38bdf8" stop-opacity="0"/></radialGradient>'
+    +'</defs>';
+  var body='<ellipse cx="12" cy="27" rx="11" ry="8" fill="url(#ldglow)"/>'
+    +'<path d="M12 0.8 C13.8 5.6 17.2 8.8 18.9 13.4 C20.3 17.2 20.9 20.6 19.9 24.6 C18.6 30 15.7 33.4 12 33.4 C8.3 33.4 5.4 30 4.1 24.6 C3.2 20.9 3.8 17.3 5.5 14 C6.2 15.9 7.3 17 8.5 17.4 C8 13.4 9.3 7.4 12 0.8 Z" fill="url(#ldo)"/>'
+    +'<path class="fl-mid" d="M12.4 9 C13.6 12.6 15.8 14.9 16.7 18.2 C17.5 21.2 17.3 24 16 27 C14.9 29.6 13.6 31 12 31 C10.4 31 9.1 29.6 8 27 C6.7 24 6.5 21.2 7.3 18.2 C7.7 19.3 8.4 20.1 9.2 20.5 C9 16.9 10.2 12.4 12.4 9 Z" fill="url(#ldm)"/>'
+    +'<path d="M12.2 19.5 C13 21.8 14.3 23.3 14.3 25.8 C14.3 28.4 13.3 30 12 30 C10.7 30 9.7 28.4 9.7 25.8 C9.7 23.3 11 21.8 12.2 19.5 Z" fill="url(#ldc)"/>';
   for(var i=0;i<N;i++){
     var a=(i/N)*Math.PI*2-Math.PI/2;
     var f=document.createElement('span'); f.className='ld-flame';
     f.style.left=(145+129*Math.cos(a))+'px';
     f.style.top=(145+129*Math.sin(a))+'px';
-    f.innerHTML='<svg viewBox="0 0 20 30" aria-hidden="true">'+(i===0?defs:'')+body+'</svg>';
+    f.innerHTML='<svg viewBox="0 0 24 36" aria-hidden="true" style="animation-delay:'+((i%7)*-0.09)+'s">'+(i===0?defs:'')+body+'</svg>';
+    f.style.setProperty('--fd',(0.34+((i*29)%9)*0.035)+'s');
     ring.appendChild(f); flames.push(f);
   }
   function lightTo(n){ while(lit<n&&lit<N){ flames[lit].classList.add('lit'); lit++; } }
+  /* The ring is the loading bar: exactly one flame at a time, in
+     order. The last flame waits for the document to truly finish. */
+  lightTo(1);
   var timer=setInterval(function(){
-    var done=document.readyState==='complete';
-    var target=done?N:Math.min(N-1, 2+Math.floor((Date.now()-start)/300));
-    lightTo(target);
-    if(lit>=N){
+    if(lit<N-1){ lightTo(lit+1); return; }
+    if(document.readyState==='complete'){
+      lightTo(N);
       clearInterval(timer);
       var hold=Math.max(0,3400-(Date.now()-start));
       setTimeout(function(){
@@ -312,7 +326,7 @@
         if(L){ L.classList.add('done'); document.body.style.overflow=''; setTimeout(function(){ if(L.parentNode) L.parentNode.removeChild(L); },700); }
       }, hold+300);
     }
-  },110);
+  },280);
   /* Belt-and-braces cleanup matching the CSS safety fade. */
   setTimeout(function(){
     var L2=document.getElementById('loader');
